@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五條悟 3D 戰鬥模擬器 - 領域展開與無下限</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- FontAwesome Font for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #050505;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* 領域展開特殊黑屏特效 */
+        #domain-overlay {
+            pointer-events: none;
+            transition: all 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        /* 自訂滾動條隱藏 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 動畫字體特效 */
+        .anime-text-shadow {
+            text-shadow: 4px 4px 0px rgba(0,0,0,0.9), 0 0 30px currentColor;
+        }
+        /* 虛擬搖桿與視角區樣式 */
+        #joystick-zone, #look-zone { touch-action: none; }
+    </style>
+</head>
+<body class="relative text-white overflow-hidden">
+
+    <!-- 遊戲 3D 畫布容器 -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- 動畫級大字招式名稱容器 -->
+    <div id="anime-skill-container" class="absolute inset-0 flex items-center justify-center pointer-events-none z-30 overflow-hidden">
+        <div id="anime-skill-text" class="text-6xl md:text-8xl lg:text-[8rem] font-black italic tracking-widest opacity-0 transform scale-150 whitespace-nowrap anime-text-shadow">
+            <!-- 動態插入招式名稱 -->
+        </div>
+    </div>
+
+    <!-- 領域展開：無量空處 視覺覆蓋特效 -->
+    <div id="domain-overlay" class="absolute inset-0 bg-black opacity-0 z-40 flex flex-col items-center justify-center pointer-events-none transition-all duration-1000">
+        <div id="domain-title" class="text-6xl md:text-8xl lg:text-[9rem] font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-100 via-indigo-200 to-white scale-50 opacity-0 transition-all duration-1000 flex flex-col items-center gap-4 anime-text-shadow">
+            <span class="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">領域展開</span>
+            <span class="text-4xl md:text-6xl lg:text-[6rem] text-blue-200 drop-shadow-[0_0_20px_rgba(59,130,246,0.9)]">「無量空處」</span>
+        </div>
+        <div id="domain-sub" class="text-gray-300 mt-8 text-xl md:text-3xl opacity-0 transition-all duration-1000 delay-300 tracking-[0.5em]">
+            無限的資訊正在湧入...
+        </div>
+    </div>
+
+    <!-- 頂部資訊列：生命值、擊殺數、領域計量條 -->
+    <div class="absolute top-4 left-4 right-4 z-20 flex flex-wrap justify-between items-center gap-4 pointer-events-none">
+        
+        <!-- 玩家狀態 -->
+        <div class="bg-black/80 backdrop-blur-md px-5 py-3 rounded-xl border border-blue-500/50 flex items-center gap-4 pointer-events-auto shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+            <div class="flex flex-col">
+                <span class="text-xs font-bold text-blue-400 tracking-wider">現代最強術師 - 五條悟</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-sm font-semibold">HP</span>
+                    <div class="w-48 h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+                        <div id="hp-bar" class="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-full transition-all duration-300"></div>
+                    </div>
+                    <span id="hp-text" class="text-xs font-bold w-12 text-right">100 / 100</span>
+                </div>
+            </div>
+            <!-- 無下限狀態標籤 -->
+            <div id="limitless-indicator" class="hidden px-2.5 py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold rounded-lg animate-pulse">
+                無下限屏障
+            </div>
+        </div>
+
+        <!-- 擊殺數與分數 (新增 50 人勝利目標) -->
+        <div class="bg-black/80 backdrop-blur-md px-5 py-3 rounded-xl border border-purple-500/50 text-center pointer-events-auto flex items-center gap-4 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+            <div>
+                <span class="text-xs font-bold text-purple-400 tracking-wider block mb-1">祓除目標</span>
+                <span class="text-2xl font-black text-white drop-shadow"><span id="kill-count" class="text-yellow-400">0</span> <span class="text-lg text-gray-400">/ 50</span></span>
+            </div>
+            <div class="border-l border-gray-700 pl-4">
+                <span class="text-xs font-bold text-gray-400 tracking-wider block mb-1">當前波數</span>
+                <span id="wave-count" class="text-2xl font-black text-blue-400">1</span>
+            </div>
+        </div>
+
+        <!-- 領域展開能量與頂部按鈕區 -->
+        <div class="flex items-center gap-3 pointer-events-auto">
+            <!-- 視角切換按鈕 -->
+            <button id="view-toggle-btn" class="bg-zinc-900/80 border border-zinc-600 text-white px-4 h-12 flex items-center justify-center rounded-xl hover:bg-zinc-700 transition-colors shadow-lg active:scale-95 gap-2 font-bold text-sm">
+                <i class="fa-solid fa-camera"></i> <span class="hidden sm:inline">視角 (V)</span>
+            </button>
+            
+            <div class="bg-black/80 backdrop-blur-md px-5 py-3 rounded-xl border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                <span class="text-xs font-bold text-indigo-400 tracking-wider flex justify-between">
+                    <span>領域能量 (LIMIT)</span>
+                    <span id="de-text" class="text-indigo-300 font-black">0%</span>
+                </span>
+                <div class="w-48 h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700 mt-1">
+                    <div id="de-bar" class="h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+            
+            <!-- 設定按鈕 -->
+            <button id="settings-btn" class="bg-zinc-900/80 border border-zinc-700 text-white w-12 h-12 flex items-center justify-center rounded-xl hover:bg-zinc-700 transition-colors shadow-lg active:scale-95">
+                <i class="fa-solid fa-gear text-xl"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 手機模式控制區 (預設隱藏) -->
+    <div id="mobile-controls" class="hidden absolute inset-0 z-10 pointer-events-none">
+        <!-- 左側移動搖桿區 -->
+        <div id="joystick-zone" class="absolute bottom-40 left-4 w-36 h-36 bg-white/5 rounded-full border-2 border-white/20 pointer-events-auto flex items-center justify-center backdrop-blur-sm">
+            <div id="joystick-knob" class="w-14 h-14 bg-white/40 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)]"></div>
+        </div>
+        <!-- 右側視角轉動區 -->
+        <div id="look-zone" class="absolute top-0 right-0 w-1/2 h-full pointer-events-auto"></div>
+        <!-- 跳躍按鈕 -->
+        <button id="mobile-jump-btn" class="absolute bottom-40 right-4 w-16 h-16 bg-white/10 rounded-full border-2 border-white/20 pointer-events-auto flex items-center justify-center backdrop-blur-sm active:bg-white/30">
+            <i class="fa-solid fa-arrow-up text-2xl text-white/80"></i>
+        </button>
+    </div>
+
+    <!-- 螢幕中央准星 -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+        <div class="w-8 h-8 flex items-center justify-center opacity-70">
+            <div class="absolute w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_rgba(255,255,255,1)]"></div>
+            <div class="absolute w-5 h-[2px] bg-white/50"></div>
+            <div class="absolute h-5 w-[2px] bg-white/50"></div>
+        </div>
+    </div>
+
+    <!-- 底部 1~10 技能快捷操作欄 -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3 w-full max-w-5xl px-4 pointer-events-none">
+        
+        <!-- 當前領域狀態通知 -->
+        <div id="domain-active-notice" class="hidden bg-indigo-900/90 backdrop-blur-md px-6 py-2 rounded-full border-2 border-indigo-400 text-indigo-100 text-base font-black tracking-widest animate-bounce shadow-[0_0_20px_rgba(99,102,241,0.6)]">
+            「無量空處」展開中 - 技能無冷卻狂轟！
+        </div>
+
+        <!-- 1~10 技能熱鍵面板 -->
+        <div class="bg-black/85 backdrop-blur-xl p-3.5 rounded-2xl border-2 border-zinc-700 flex items-center gap-2.5 overflow-x-auto w-full no-scrollbar pointer-events-auto shadow-[0_10px_40px_rgba(0,0,0,0.8)] justify-center">
+            
+            <!-- 1: 拳頭 -->
+            <button id="skill-1-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden shadow-inner group-hover:border-zinc-400">
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">1</div>
+                    <i class="fa-solid fa-hand-fist text-yellow-500 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-1" class="absolute inset-0 bg-black/80 flex items-center justify-center text-yellow-500 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-1-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-zinc-300 mt-1.5 tracking-wider">體術・拳</span>
+            </button>
+
+            <!-- 2: 踢 -->
+            <button id="skill-2-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden shadow-inner group-hover:border-zinc-400">
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">2</div>
+                    <i class="fa-solid fa-shoe-prints text-orange-500 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-2" class="absolute inset-0 bg-black/80 flex items-center justify-center text-orange-500 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-2-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-zinc-300 mt-1.5 tracking-wider">體術・踢</span>
+            </button>
+
+            <!-- 3: 蒼 -->
+            <button id="skill-3-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-blue-950/80 border border-blue-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(37,99,235,0.2)] group-hover:border-blue-400">
+                    <div class="absolute top-0 left-0 bg-blue-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">3</div>
+                    <i class="fa-solid fa-vortex text-blue-400 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-3" class="absolute inset-0 bg-black/80 flex items-center justify-center text-blue-400 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-3-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-blue-300 mt-1.5 tracking-wider">順轉「蒼」</span>
+            </button>
+
+            <!-- 4: 赫 -->
+            <button id="skill-4-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-red-950/80 border border-red-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(220,38,38,0.2)] group-hover:border-red-400">
+                    <div class="absolute top-0 left-0 bg-red-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">4</div>
+                    <i class="fa-solid fa-burst text-red-400 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-4" class="absolute inset-0 bg-black/80 flex items-center justify-center text-red-400 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-4-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-red-300 mt-1.5 tracking-wider">反轉「赫」</span>
+            </button>
+
+            <!-- 5: 茈 -->
+            <button id="skill-5-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-purple-950/80 border border-purple-500 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.4)] group-hover:border-purple-300">
+                    <div class="absolute top-0 left-0 bg-purple-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">5</div>
+                    <i class="fa-solid fa-circle-radiation text-purple-300 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-5" class="absolute inset-0 bg-black/80 flex items-center justify-center text-purple-300 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-5-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-purple-300 mt-1.5 tracking-wider">虛式「茈」</span>
+            </button>
+
+            <!-- 6: 無下限 -->
+            <button id="skill-6-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-cyan-950/80 border border-cyan-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(8,145,178,0.2)] group-hover:border-cyan-400">
+                    <div class="absolute top-0 left-0 bg-cyan-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">6</div>
+                    <i class="fa-solid fa-shield-halved text-cyan-400 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-6" class="absolute inset-0 bg-black/80 flex items-center justify-center text-cyan-400 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-6-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-cyan-300 mt-1.5 tracking-wider">無下限</span>
+            </button>
+
+            <!-- 7: 瞬移 -->
+            <button id="skill-7-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">7</div>
+                    <i class="fa-solid fa-bolt text-teal-400 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-7" class="absolute inset-0 bg-black/80 flex items-center justify-center text-teal-400 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-7-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-zinc-300 mt-1.5 tracking-wider">瞬移</span>
+            </button>
+
+            <!-- 8: 反轉術式治癒 -->
+            <button id="skill-8-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">8</div>
+                    <i class="fa-solid fa-heart-pulse text-emerald-400 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-8" class="absolute inset-0 bg-black/80 flex items-center justify-center text-emerald-400 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-8-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-zinc-300 mt-1.5 tracking-wider">反轉術式</span>
+            </button>
+
+            <!-- 9: 咒力爆發 -->
+            <button id="skill-9-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">9</div>
+                    <i class="fa-solid fa-fire text-pink-500 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="cooldown-9" class="absolute inset-0 bg-black/80 flex items-center justify-center text-pink-500 font-black text-sm opacity-0 z-20 backdrop-blur-sm">
+                        <span id="cooldown-9-txt">0s</span>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-zinc-300 mt-1.5 tracking-wider">咒力爆發</span>
+            </button>
+
+            <!-- 10: 領域展開 -->
+            <button id="skill-10-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90 disabled:opacity-30" disabled>
+                <div class="w-14 h-14 rounded-xl bg-indigo-950/90 border-2 border-indigo-700 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(67,56,202,0.5)]" id="domain-btn-box">
+                    <div class="absolute top-0 left-0 bg-indigo-800 px-1.5 py-0.5 rounded-br-lg text-[10px] font-black text-white z-10">0</div>
+                    <i class="fa-solid fa-eye text-indigo-300 text-2xl group-hover:scale-110 transition-transform mt-1"></i>
+                    <div id="domain-lock" class="absolute inset-0 bg-black/70 flex items-center justify-center text-gray-300 text-sm z-20 backdrop-blur-[2px]">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                </div>
+                <span class="text-[11px] font-bold text-indigo-300 mt-1.5 tracking-wider">無量空處</span>
+            </button>
+
+        </div>
+        
+        <!-- 操作說明 -->
+        <div class="text-[11px] text-gray-400 flex flex-wrap justify-center gap-x-4 gap-y-1 bg-black/50 px-4 py-1.5 rounded-full mt-1">
+            <span><strong class="text-white">切換視角：</strong>按 V 鍵</span>
+            <span><strong class="text-white">滑鼠移動：</strong>轉動視角</span>
+            <span><strong class="text-white">WASD：</strong>移動</span>
+            <span><strong class="text-white">空白鍵：</strong>跳躍</span>
+        </div>
+    </div>
+
+    <!-- 各種 Modal (首頁、失敗、勝利、設定) -->
+    <div id="modal-container" class="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        
+        <!-- 首頁 Modal -->
+        <div id="start-modal" class="bg-zinc-950 border border-blue-500/30 max-w-lg w-full rounded-2xl p-6 md:p-8 flex flex-col items-center text-center shadow-[0_0_40px_rgba(59,130,246,0.15)] max-h-[90vh] overflow-y-auto no-scrollbar">
+            <h1 class="text-3xl md:text-4xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 mb-2 mt-2">五條悟：最強咒術對決</h1>
+            <p class="text-[10px] sm:text-xs text-blue-400/80 tracking-widest uppercase mb-6 font-bold">🎯 勝利目標：祓除 50 隻咒靈</p>
+            
+            <div class="w-full text-left bg-zinc-900/60 p-4 rounded-xl border border-zinc-800 mb-6 text-xs text-gray-300 space-y-2.5 max-h-[35vh] sm:max-h-[320px] overflow-y-auto no-scrollbar">
+                <h3 class="font-bold text-white text-sm border-b border-zinc-800 pb-1.5 flex items-center gap-2 sticky top-0 bg-zinc-900/90 py-1">
+                    <i class="fa-solid fa-circle-info text-blue-400"></i> 1~10 技能鍵位對照表：
+                </h3>
+                <p><span class="text-yellow-500 font-bold">[1] 體術・拳</span>: 揮出帶有空間震盪的重拳。</p>
+                <p><span class="text-orange-500 font-bold">[2] 體術・踢</span>: 迴旋側踢，釋放物理衝擊波擊退咒靈。</p>
+                <p><span class="text-blue-400 font-bold">[3] 順轉・蒼</span>: 製造引力黑洞，強力聚攏並撕裂咒靈。</p>
+                <p><span class="text-red-400 font-bold">[4] 反轉・赫</span>: 發射高壓排斥彈，引發紅色衝擊波。</p>
+                <p><span class="text-purple-400 font-bold">[5] 虛式・茈</span>: 融合能量發射穿透性極強的紫色極光。</p>
+                <p><span class="text-cyan-300 font-bold">[6] 無下限屏障</span>: 展開防護罩，免疫一切物理與咒力傷害。</p>
+                <p><span class="text-teal-400 font-bold">[7] 咒術・瞬移</span>: 瞬間朝著移動方向閃現移動。</p>
+                <p><span class="text-emerald-400 font-bold">[8] 反轉術式</span>: 使用咒力引導反轉，瞬間回復 HP。</p>
+                <p><span class="text-pink-500 font-bold">[9] 咒力爆發</span>: 狂暴狀態，提升跑速與體術傷害。</p>
+                <p><span class="text-indigo-400 font-bold">[10/0] 領域展開</span>: 蓄滿能量後開啟！無量空處，全場定格！</p>
+                <p class="mt-2 pt-2 border-t border-zinc-800 text-yellow-300"><i class="fa-solid fa-video"></i> 按 V 鍵可以切換第一/二/三人稱視角！</p>
+            </div>
+
+            <button id="start-game-btn" class="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-xl font-bold text-base hover:from-blue-500 hover:to-purple-500 transition-all active:scale-95 shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                踏入領域，開始戰鬥
+            </button>
+        </div>
+
+        <!-- 遊戲結束 Modal -->
+        <div id="gameover-modal" class="hidden bg-zinc-950 border border-red-500/30 max-w-md w-full rounded-2xl p-8 flex flex-col items-center text-center shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+            <div class="w-16 h-16 bg-red-950/50 border border-red-500/50 rounded-full flex items-center justify-center mb-4">
+                <i class="fa-solid fa-skull-crossbones text-red-500 text-3xl"></i>
+            </div>
+            <h2 class="text-3xl font-black text-red-500 tracking-wider mb-2">五條悟戰敗？</h2>
+            <p class="text-sm text-gray-400 mb-6">看來你大意了... 距離目標 50 斬還差一點。</p>
+            <div class="bg-zinc-900/60 p-4 rounded-xl border border-zinc-800 w-full mb-6 text-sm">
+                <div class="flex justify-between py-1">
+                    <span class="text-gray-400">祓除咒靈數量</span>
+                    <span id="end-kills" class="font-bold text-white">0</span>
+                </div>
+            </div>
+            <button id="restart-game-btn" class="w-full py-3 bg-zinc-900 border border-gray-700 rounded-xl font-bold text-white hover:bg-zinc-800 hover:border-gray-600 transition-all active:scale-95">
+                再次挑戰
+            </button>
+        </div>
+
+        <!-- 勝利 Modal -->
+        <div id="victory-modal" class="hidden bg-zinc-950 border border-yellow-500/50 max-w-md w-full rounded-2xl p-8 flex flex-col items-center text-center shadow-[0_0_50px_rgba(234,179,8,0.3)]">
+            <div class="w-20 h-20 bg-yellow-950/50 border-2 border-yellow-500/80 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                <i class="fa-solid fa-crown text-yellow-400 text-4xl"></i>
+            </div>
+            <h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 tracking-wider mb-2">天上天下，唯我獨尊</h2>
+            <p class="text-sm text-gray-300 mb-6">你已成功祓除了 50 隻咒靈，展現了現代最強的實力！</p>
+            <button id="victory-restart-btn" class="w-full py-3.5 bg-gradient-to-r from-yellow-600 to-orange-600 rounded-xl font-bold text-white hover:from-yellow-500 hover:to-orange-500 transition-all active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+                繼續無盡挑戰
+            </button>
+        </div>
+
+        <!-- 設定 Modal -->
+        <div id="settings-modal" class="hidden bg-zinc-950 border border-zinc-500/30 max-w-sm w-full rounded-2xl p-8 flex flex-col items-center shadow-[0_0_40px_rgba(255,255,255,0.05)]">
+            <h2 class="text-3xl font-black text-white tracking-wider mb-6">遊戲設定</h2>
+            
+            <div class="w-full bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 mb-4 flex justify-between items-center">
+                <span class="text-gray-300 font-bold">動畫運鏡特效</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-cinematic" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
+
+            <div class="w-full bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 mb-8 flex justify-between items-center">
+                <span class="text-gray-300 font-bold">手機操作模式</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-mobile" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                </label>
+            </div>
+
+            <button id="close-settings-btn" class="w-full py-3.5 bg-blue-600 rounded-xl font-bold text-white hover:bg-blue-500 transition-all active:scale-95 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                返回遊戲
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲主要邏輯 -->
+    <script>
+        // -----------------------------------------------------------------
+        // 1. 遊戲狀態與變數宣告
+        // -----------------------------------------------------------------
+        const state = {
+            gameActive: false,
+            gameWon: false,
+            hp: 100,
+            maxHp: 100,
+            kills: 0,
+            targetKills: 50,
+            wave: 1,
+            domainProgress: 0, 
+            domainActive: false,
+            domainTimer: 0,
+            domainDuration: 12, // 延長領域時間
+            
+            limitlessActive: false,
+            limitlessTimer: 0,
+            limitlessDuration: 5, 
+            
+            surgeActive: false,
+            surgeTimer: 0,
+            surgeDuration: 6, 
+
+            // 1~10 技能快捷鍵冷卻系統
+            cooldowns: {
+                skill1: { current: 0, max: 0.3 },   
+                skill2: { current: 0, max: 0.8 },   
+                skill3: { current: 0, max: 5 },     
+                skill4: { current: 0, max: 7 },     
+                skill5: { current: 0, max: 12 },    
+                skill6: { current: 0, max: 14 },    
+                skill7: { current: 0, max: 2 },     
+                skill8: { current: 0, max: 10 },    
+                skill9: { current: 0, max: 15 },    
+                skill10: { current: 0, max: 0 }     
+            },
+            
+            keys: { w: false, a: false, s: false, d: false, space: false },
+            joystick: { x: 0, y: 0 },
+            playerVelocity: new THREE.Vector3(),
+            isJumping: false,
+            playerHeight: 1.6,
+
+            // 設定與視角狀態
+            cinematicCamera: true,
+            mobileMode: false,
+            cameraView: 1, // 1: 第一人稱, 2: 第三人稱(近), 3: 第三人稱(遠)
+            gojoParts: null // 存放生成的五條悟模型部件以供動畫
+        };
+
+        // 3D 核心變數
+        let scene, camera, renderer, clock;
+        let ground, player, cameraPivot;
+        let enemies = [];
+        let particles = [];
+        let projectiles = [];
+        let domainSphere = null; 
+        let domainCenterGrp = null; 
+        let limitlessVisualMesh = null; 
+        let playerSurgeAura = null; 
+        let directionalLight, ambientLight, domainLight;
+
+        let cameraShakeTimer = 0;
+        let cameraShakeIntensity = 0;
+
+        // 運鏡變數
+        let targetFov = 70;
+        let currentFov = 70;
+        let cinematicRoll = 0;
+        let cinematicYawOffset = 0;
+
+        let isPointerLocked = false;
+        let mousePitch = 0; 
+        let mouseYaw = 0;   
+
+        // -----------------------------------------------------------------
+        // 2. 頁面 UI DOM 綁定
+        // -----------------------------------------------------------------
+        const modalContainer = document.getElementById('modal-container');
+        const startModal = document.getElementById('start-modal');
+        const gameoverModal = document.getElementById('gameover-modal');
+        const victoryModal = document.getElementById('victory-modal');
+        const settingsModal = document.getElementById('settings-modal');
+        
+        const startGameBtn = document.getElementById('start-game-btn');
+        const restartGameBtn = document.getElementById('restart-game-btn');
+        const victoryRestartBtn = document.getElementById('victory-restart-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const viewToggleBtn = document.getElementById('view-toggle-btn');
+        
+        const toggleCinematic = document.getElementById('toggle-cinematic');
+        const toggleMobile = document.getElementById('toggle-mobile');
+        const mobileControls = document.getElementById('mobile-controls');
+        
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickKnob = document.getElementById('joystick-knob');
+        const lookZone = document.getElementById('look-zone');
+        const mobileJumpBtn = document.getElementById('mobile-jump-btn');
+
+        const hpBar = document.getElementById('hp-bar');
+        const hpText = document.getElementById('hp-text');
+        const killCountEl = document.getElementById('kill-count');
+        const waveCountEl = document.getElementById('wave-count');
+        const deBar = document.getElementById('de-bar');
+        const deText = document.getElementById('de-text');
+        const limitlessIndicator = document.getElementById('limitless-indicator');
+
+        const animeSkillText = document.getElementById('anime-skill-text');
+
+        // 技能按鈕
+        const btnS1 = document.getElementById('skill-1-btn');
+        const btnS2 = document.getElementById('skill-2-btn');
+        const btnS3 = document.getElementById('skill-3-btn');
+        const btnS4 = document.getElementById('skill-4-btn');
+        const btnS5 = document.getElementById('skill-5-btn');
+        const btnS6 = document.getElementById('skill-6-btn');
+        const btnS7 = document.getElementById('skill-7-btn');
+        const btnS8 = document.getElementById('skill-8-btn');
+        const btnS9 = document.getElementById('skill-9-btn');
+        const btnS10 = document.getElementById('skill-10-btn');
+        const domainLock = document.getElementById('domain-lock');
+
+        const cdOverlay1 = document.getElementById('cooldown-1'); const cdTxt1 = document.getElementById('cooldown-1-txt');
+        const cdOverlay2 = document.getElementById('cooldown-2'); const cdTxt2 = document.getElementById('cooldown-2-txt');
+        const cdOverlay3 = document.getElementById('cooldown-3'); const cdTxt3 = document.getElementById('cooldown-3-txt');
+        const cdOverlay4 = document.getElementById('cooldown-4'); const cdTxt4 = document.getElementById('cooldown-4-txt');
+        const cdOverlay5 = document.getElementById('cooldown-5'); const cdTxt5 = document.getElementById('cooldown-5-txt');
+        const cdOverlay6 = document.getElementById('cooldown-6'); const cdTxt6 = document.getElementById('cooldown-6-txt');
+        const cdOverlay7 = document.getElementById('cooldown-7'); const cdTxt7 = document.getElementById('cooldown-7-txt');
+        const cdOverlay8 = document.getElementById('cooldown-8'); const cdTxt8 = document.getElementById('cooldown-8-txt');
+        const cdOverlay9 = document.getElementById('cooldown-9'); const cdTxt9 = document.getElementById('cooldown-9-txt');
+
+        const domainOverlay = document.getElementById('domain-overlay');
+        const domainTitle = document.getElementById('domain-title');
+        const domainSub = document.getElementById('domain-sub');
+        const domainNotice = document.getElementById('domain-active-notice');
+
+        // -----------------------------------------------------------------
+        // 動畫招式名稱顯示系統
+        // -----------------------------------------------------------------
+        let animeTextTimeout;
+        function showAnimeSkillName(name, colorHex) {
+            clearTimeout(animeTextTimeout);
+            animeSkillText.style.transition = 'none';
+            animeSkillText.style.opacity = '0';
+            animeSkillText.style.transform = 'scale(1.8) rotate(-2deg)';
+            animeSkillText.style.color = colorHex;
+            animeSkillText.innerText = name;
+
+            void animeSkillText.offsetWidth;
+
+            animeSkillText.style.transition = 'all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            animeSkillText.style.opacity = '1';
+            animeSkillText.style.transform = 'scale(1) rotate(0deg)';
+
+            animeTextTimeout = setTimeout(() => {
+                animeSkillText.style.transition = 'all 0.5s ease-out';
+                animeSkillText.style.opacity = '0';
+                animeSkillText.style.transform = 'scale(0.85) translateY(20px)';
+            }, 600);
+        }
+
+        // -----------------------------------------------------------------
+        // 3. 初始化 3D 場景與五條悟模型
+        // -----------------------------------------------------------------
+        function initEngine() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.FogExp2(0x020205, 0.015);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+            cameraPivot = new THREE.Group();
+            
+            // 將 camera 放入 cameraPivot
+            cameraPivot.add(camera);
+            scene.add(cameraPivot);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            ambientLight = new THREE.AmbientLight(0x0f172a, 1.2);
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
+            directionalLight.position.set(20, 40, 20);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            createGround();
+
+            // 建立玩家控制實體與專屬的 3D 五條悟模型
+            player = new THREE.Group();
+            player.position.set(0, 0, 0);
+            scene.add(player);
+
+            const gojoModel = createGojoModel();
+            player.add(gojoModel);
+            
+            // 初始套用視角
+            updateCameraViewPosition();
+
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            renderer.domElement.addEventListener('click', onCanvasClick);
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            
+            initMobileControls();
+        }
+
+        // 純程式碼打造的五條悟 3D 模型
+        function createGojoModel() {
+            const group = new THREE.Group();
+
+            const clothMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.4 });
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+            const blindMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1.0 });
+
+            // 軀幹
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.7, 16), clothMat);
+            torso.position.y = 1.05;
+            torso.castShadow = true;
+            group.add(torso);
+
+            // 頭部群組
+            const headGroup = new THREE.Group();
+            headGroup.position.y = 1.55;
+            group.add(headGroup);
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), skinMat);
+            head.castShadow = true;
+            headGroup.add(head);
+
+            // 黑色眼罩
+            const blindfold = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.1, 16), blindMat);
+            blindfold.position.y = 0.02;
+            headGroup.add(blindfold);
+
+            // 銀白色刺蝟頭
+            for(let i=0; i<15; i++) {
+                const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 8), hairMat);
+                spike.position.y = 0.15;
+                spike.rotation.x = (Math.random() - 0.5) * 1.5;
+                spike.rotation.z = (Math.random() - 0.5) * 1.5;
+                headGroup.add(spike);
+            }
+
+            // 四肢 (為了走路動畫獨立出來)
+            const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), clothMat);
+            leftArm.position.set(-0.35, 1.1, 0);
+            leftArm.castShadow = true;
+            group.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), clothMat);
+            rightArm.position.set(0.35, 1.1, 0);
+            rightArm.castShadow = true;
+            group.add(rightArm);
+
+            const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.7, 8), clothMat);
+            leftLeg.position.set(-0.15, 0.35, 0);
+            leftLeg.castShadow = true;
+            group.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.7, 8), clothMat);
+            rightLeg.position.set(0.15, 0.35, 0);
+            rightLeg.castShadow = true;
+            group.add(rightLeg);
+
+            state.gojoParts = { headGroup, leftArm, rightArm, leftLeg, rightLeg };
+
+            return group;
+        }
+
+        // 視角切換邏輯
+        function toggleCameraView() {
+            state.cameraView = state.cameraView >= 3 ? 1 : state.cameraView + 1;
+            updateCameraViewPosition();
+            showAnimeSkillName(`視角 ${state.cameraView}`, '#ffffff');
+        }
+
+        function updateCameraViewPosition() {
+            if (!state.gojoParts) return;
+
+            // 切換視角時重置仰角，避免視角詭異
+            mousePitch = 0; 
+            
+            if (state.cameraView === 1) {
+                // 第一人稱：相機在頭部位置，隱藏自己的頭防穿模
+                camera.position.set(0, 0, 0);
+                state.gojoParts.headGroup.visible = false;
+            } else if (state.cameraView === 2) {
+                // 第三人稱(越肩近距)
+                camera.position.set(0.8, 0.2, 3.5);
+                state.gojoParts.headGroup.visible = true;
+            } else if (state.cameraView === 3) {
+                // 第三人稱(遠距/上帝)
+                camera.position.set(0, 2.5, 7);
+                state.gojoParts.headGroup.visible = true;
+            }
+            
+            // 第三人稱時，讓相機看向前方一定距離的目標點
+            if (state.cameraView !== 1) {
+                camera.lookAt(0, 0.5, -5);
+            } else {
+                camera.rotation.set(0,0,0); // 1st person looks straight relative to pivot
+            }
+        }
+
+        // --- 手機控制與設定邏輯 ---
+        function initMobileControls() {
+            let isDragging = false;
+            let joystickCenter = { x: 0, y: 0 };
+            const maxRadius = 40;
+
+            joystickZone.addEventListener('touchstart', (e) => {
+                if (!state.mobileMode || !state.gameActive) return;
+                isDragging = true;
+                const rect = joystickZone.getBoundingClientRect();
+                joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                updateJoystick(e.touches[0]);
+            });
+
+            joystickZone.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                updateJoystick(e.touches[0]);
+            });
+
+            const stopJoystick = () => {
+                isDragging = false;
+                state.joystick.x = 0;
+                state.joystick.y = 0;
+                joystickKnob.style.transform = `translate(0px, 0px)`;
+            };
+
+            joystickZone.addEventListener('touchend', stopJoystick);
+            joystickZone.addEventListener('touchcancel', stopJoystick);
+
+            function updateJoystick(touch) {
+                let dx = touch.clientX - joystickCenter.x;
+                let dy = touch.clientY - joystickCenter.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > maxRadius) {
+                    dx = (dx / distance) * maxRadius;
+                    dy = (dy / distance) * maxRadius;
+                }
+                joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+                state.joystick.x = dx / maxRadius;
+                state.joystick.y = dy / maxRadius;
+            }
+
+            let lastLook = { x: 0, y: 0 };
+            lookZone.addEventListener('touchstart', (e) => {
+                if (!state.mobileMode || !state.gameActive) return;
+                lastLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            });
+
+            lookZone.addEventListener('touchmove', (e) => {
+                if (!state.mobileMode || !state.gameActive) return;
+                e.preventDefault();
+                const currentLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                const deltaX = currentLook.x - lastLook.x;
+                const deltaY = currentLook.y - lastLook.y;
+                
+                mouseYaw -= deltaX * 0.005;
+                mousePitch -= deltaY * 0.005;
+                mousePitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, mousePitch));
+                lastLook = currentLook;
+            });
+
+            mobileJumpBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (state.gameActive && !state.isJumping) {
+                    state.keys.space = true;
+                    setTimeout(() => state.keys.space = false, 100); 
+                }
+            });
+        }
+        
+        function applySettings() {
+            state.cinematicCamera = toggleCinematic.checked;
+            state.mobileMode = toggleMobile.checked;
+            
+            if (state.mobileMode) {
+                mobileControls.classList.remove('hidden');
+                document.exitPointerLock();
+            } else {
+                mobileControls.classList.add('hidden');
+                if (state.gameActive) renderer.domElement.requestPointerLock();
+            }
+        }
+
+        function createGround() {
+            const size = 200;
+            const segments = 100;
+            
+            const gridHelper = new THREE.GridHelper(size, segments, 0x3b82f6, 0x111827);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            const floorGeo = new THREE.PlaneGeometry(size, size);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x05070c,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            ground = new THREE.Mesh(floorGeo, floorMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(e) {
+            if (!state.gameActive) return;
+            if (!state.mobileMode && !isPointerLocked) return;
+            if (state.mobileMode) return; 
+
+            const sensitivity = 0.002;
+            mouseYaw -= e.movementX * sensitivity;
+            mousePitch -= e.movementY * sensitivity;
+            mousePitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, mousePitch));
+        }
+
+        function onKeyDown(e) {
+            if (!state.gameActive) return;
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'arrowup') state.keys.w = true;
+            if (key === 's' || key === 'arrowdown') state.keys.s = true;
+            if (key === 'a' || key === 'arrowleft') state.keys.a = true;
+            if (key === 'd' || key === 'arrowright') state.keys.d = true;
+            if (e.code === 'Space') state.keys.space = true;
+            if (key === 'v') toggleCameraView();
+
+            if (e.key === '1') triggerPunch();
+            if (e.key === '2') triggerKick();
+            if (e.key === '3') triggerSkillBlue();
+            if (e.key === '4') triggerSkillRed();
+            if (e.key === '5') triggerSkillPurple();
+            if (e.key === '6') triggerLimitless();
+            if (e.key === '7') triggerTeleport();
+            if (e.key === '8') triggerHeal();
+            if (e.key === '9') triggerSurge();
+            if (e.key === '0') triggerSkillDomain();
+        }
+
+        function onKeyUp(e) {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'arrowup') state.keys.w = false;
+            if (key === 's' || key === 'arrowdown') state.keys.s = false;
+            if (key === 'a' || key === 'arrowleft') state.keys.a = false;
+            if (key === 'd' || key === 'arrowright') state.keys.d = false;
+            if (e.code === 'Space') state.keys.space = false;
+        }
+
+        function onCanvasClick(e) {
+            if (!state.gameActive) return;
+            if (state.mobileMode) return; 
+            if (e.button === 0) triggerPunch();
+        }
+
+        // -----------------------------------------------------------------
+        // 5. 1~10 招式實作與物理特效
+        // -----------------------------------------------------------------
+
+        function triggerPunch() {
+            if (state.cooldowns.skill1.current > 0) return;
+            state.cooldowns.skill1.current = state.cooldowns.skill1.max;
+
+            const spawnPos = new THREE.Vector3();
+            cameraPivot.getWorldPosition(spawnPos); // 基於攝影機支架發射，相容各種視角
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+            
+            const strikePoint = new THREE.Vector3().copy(spawnPos).addScaledVector(dir, 2.5);
+
+            const punchGeo = new THREE.SphereGeometry(0.6, 8, 8);
+            const punchMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.8, wireframe: true });
+            const punchMesh = new THREE.Mesh(punchGeo, punchMat);
+            punchMesh.position.copy(strikePoint);
+            scene.add(punchMesh);
+
+            // 揮拳衝擊波特效
+            const shock = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 4, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.6 }));
+            shock.position.copy(strikePoint);
+            scene.add(shock);
+
+            projectiles.push({ mesh: punchMesh, shock: shock, type: 'melee_punch', life: 0.15, radius: 1.5, damage: state.surgeActive ? 40 : 25 });
+            createExplosion(strikePoint, 0xfacc15, 8, 0.4);
+            checkMeleeCollision(strikePoint, 2.2, state.surgeActive ? 40 : 25, 2.5); // 物理擊退 2.5
+        }
+
+        function triggerKick() {
+            if (state.cooldowns.skill2.current > 0) return;
+            state.cooldowns.skill2.current = state.cooldowns.skill2.max;
+
+            showAnimeSkillName('迴旋踢', '#f97316');
+            if (state.cinematicCamera) { cinematicRoll = 0.15; setTimeout(() => cinematicRoll = 0, 300); }
+
+            const spawnPos = new THREE.Vector3();
+            cameraPivot.getWorldPosition(spawnPos);
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+
+            const kickCenter = new THREE.Vector3().copy(spawnPos).addScaledVector(dir, 3.2);
+
+            const ringGeo = new THREE.TorusGeometry(1.6, 0.15, 8, 16);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.7 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.copy(kickCenter);
+            ring.rotation.x = Math.PI / 2; 
+            scene.add(ring);
+
+            projectiles.push({ mesh: ring, type: 'melee_kick', life: 0.25, radius: 2.5, damage: state.surgeActive ? 55 : 35 });
+            createExplosion(kickCenter, 0xf97316, 12, 0.8);
+            checkMeleeCollision(kickCenter, 3.5, state.surgeActive ? 55 : 35, 12.0); // 高物理擊退
+        }
+
+        function triggerSkillBlue() {
+            if (state.cooldowns.skill3.current > 0) return;
+            state.cooldowns.skill3.current = state.cooldowns.skill3.max;
+
+            showAnimeSkillName('術式順轉「蒼」', '#3b82f6');
+            if (state.cinematicCamera) { targetFov = 95; setTimeout(() => targetFov = 70, 400); }
+
+            const raycaster = new THREE.Raycaster();
+            const spawnPos = new THREE.Vector3();
+            cameraPivot.getWorldPosition(spawnPos);
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+            raycaster.set(spawnPos, dir);
+
+            const intersects = raycaster.intersectObject(ground);
+            let targetPoint = new THREE.Vector3();
+            
+            if (intersects.length > 0 && intersects[0].distance < 45) {
+                targetPoint.copy(intersects[0].point);
+            } else {
+                targetPoint.copy(spawnPos).addScaledVector(dir, 16);
+                targetPoint.y = 1.0;
+            }
+
+            const sphereGeo = new THREE.SphereGeometry(1.5, 24, 24);
+            const sphereMat = new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.9 });
+            const blueCore = new THREE.Mesh(sphereGeo, sphereMat);
+            blueCore.position.copy(targetPoint);
+            scene.add(blueCore);
+
+            const ringGeo = new THREE.RingGeometry(1.8, 2.2, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            blueCore.add(ring);
+
+            const light = new THREE.PointLight(0x2563eb, 8, 30);
+            blueCore.add(light);
+
+            // 蒼的極強物理吸力
+            projectiles.push({ mesh: blueCore, type: 'blue', life: 3.5, radius: 10.0, damage: 0.8, point: targetPoint, pulseTimer: 0 });
+            createExplosion(targetPoint, 0x1d4ed8, 30, 2.0);
+        }
+
+        function triggerSkillRed() {
+            if (state.cooldowns.skill4.current > 0) return;
+            state.cooldowns.skill4.current = state.cooldowns.skill4.max;
+
+            showAnimeSkillName('術式反轉「赫」', '#ef4444');
+            if (state.cinematicCamera) { targetFov = 50; setTimeout(() => targetFov = 70, 300); }
+
+            const spawnPos = new THREE.Vector3();
+            cameraPivot.getWorldPosition(spawnPos);
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+            spawnPos.addScaledVector(dir, 1.5);
+
+            const geo = new THREE.SphereGeometry(1.0, 16, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.95 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(spawnPos);
+            scene.add(mesh);
+
+            const light = new THREE.PointLight(0xf43f5e, 6, 15);
+            mesh.add(light);
+
+            // 赫的巨大空間排斥環
+            const shockwave = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.2, 8, 32), new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.8 }));
+            shockwave.rotation.x = Math.PI / 2;
+            mesh.add(shockwave);
+
+            projectiles.push({ mesh: mesh, shockwave: shockwave, dir: dir, speed: 35, damage: 60, life: 2.0, type: 'red', radius: 2.5 });
+            createExplosion(spawnPos, 0xef4444, 25, 1.5);
+            
+            cameraShakeTimer = 0.3; cameraShakeIntensity = 0.15;
+        }
+
+        function triggerSkillPurple() {
+            if (state.cooldowns.skill5.current > 0) return;
+            state.cooldowns.skill5.current = state.cooldowns.skill5.max;
+
+            showAnimeSkillName('虛式「茈」', '#a855f7');
+            if (state.cinematicCamera) {
+                targetFov = 130; cinematicRoll = -0.15;
+                setTimeout(() => { targetFov = 70; cinematicRoll = 0; }, 600);
+            }
+
+            const spawnPos = new THREE.Vector3();
+            cameraPivot.getWorldPosition(spawnPos);
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+            spawnPos.addScaledVector(dir, 2.0);
+
+            const purpleGroup = new THREE.Group();
+            purpleGroup.position.copy(spawnPos);
+
+            const coreGeo = new THREE.SphereGeometry(2.5, 32, 32);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.95 });
+            const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            purpleGroup.add(coreMesh);
+
+            const outerGeo = new THREE.SphereGeometry(3.5, 16, 16);
+            const outerMat = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.4, wireframe: true });
+            const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+            purpleGroup.add(outerMesh);
+
+            const light = new THREE.PointLight(0xd8b4fe, 15, 45);
+            purpleGroup.add(light);
+            scene.add(purpleGroup);
+
+            projectiles.push({ mesh: purpleGroup, coreMesh: coreMesh, outerMesh: outerMesh, dir: dir, speed: 28, damage: 180, life: 4.0, type: 'purple', radius: 5.0 });
+            createExplosion(spawnPos, 0xa855f7, 60, 4.0);
+
+            cameraShakeTimer = 0.7; cameraShakeIntensity = 0.3;
+        }
+
+        function triggerLimitless() {
+            if (state.cooldowns.skill6.current > 0) return;
+            state.cooldowns.skill6.current = state.cooldowns.skill6.max;
+
+            state.limitlessActive = true;
+            state.limitlessTimer = state.limitlessDuration;
+            limitlessIndicator.classList.remove('hidden');
+
+            showAnimeSkillName('無下限咒術', '#22d3ee');
+
+            const barrierGeo = new THREE.SphereGeometry(2.0, 32, 32);
+            const barrierMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.35, wireframe: true });
+            limitlessVisualMesh = new THREE.Mesh(barrierGeo, barrierMat);
+            player.add(limitlessVisualMesh);
+
+            createExplosion(player.position, 0x22d3ee, 30, 2.0);
+        }
+
+        function triggerTeleport() {
+            if (state.cooldowns.skill7.current > 0) return;
+            state.cooldowns.skill7.current = state.cooldowns.skill7.max;
+
+            showAnimeSkillName('瞬移', '#2dd4bf');
+
+            const dir = new THREE.Vector3();
+            cameraPivot.getWorldDirection(dir);
+            dir.y = 0; 
+            dir.normalize();
+            
+            const startPos = new THREE.Vector3().copy(player.position);
+            player.position.addScaledVector(dir, 14.0);
+
+            const limit = 95;
+            player.position.x = Math.max(-limit, Math.min(limit, player.position.x));
+            player.position.z = Math.max(-limit, Math.min(limit, player.position.z));
+
+            createExplosion(startPos, 0x3b82f6, 15, 1.0);
+            createExplosion(player.position, 0x22d3ee, 15, 1.0);
+        }
+
+        function triggerHeal() {
+            if (state.cooldowns.skill8.current > 0 || state.hp >= state.maxHp) return;
+            state.cooldowns.skill8.current = state.cooldowns.skill8.max;
+
+            showAnimeSkillName('反轉術式', '#34d399');
+            state.hp = Math.min(state.maxHp, state.hp + 40);
+            createExplosion(player.position, 0x34d399, 25, 1.5);
+        }
+
+        function triggerSurge() {
+            if (state.cooldowns.skill9.current > 0) return;
+            state.cooldowns.skill9.current = state.cooldowns.skill9.max;
+
+            state.surgeActive = true;
+            state.surgeTimer = state.surgeDuration;
+
+            showAnimeSkillName('咒力爆發', '#ec4899');
+
+            const auraGeo = new THREE.TorusGeometry(1.2, 0.1, 8, 16);
+            const auraMat = new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0.6 });
+            playerSurgeAura = new THREE.Mesh(auraGeo, auraMat);
+            playerSurgeAura.rotation.x = Math.PI / 2;
+            playerSurgeAura.position.y = 0.2;
+            player.add(playerSurgeAura);
+
+            createExplosion(player.position, 0xec4899, 30, 2.5);
+        }
+
+        function triggerSkillDomain() {
+            if (state.domainProgress < 100 || state.domainActive) return;
+
+            state.domainActive = true;
+            state.domainProgress = 0;
+            state.domainTimer = state.domainDuration;
+            
+            if (state.cinematicCamera) {
+                cinematicYawOffset = Math.PI * 2; 
+                targetFov = 110;
+                setTimeout(() => targetFov = 70, 1500);
+            }
+
+            btnS10.disabled = true;
+            domainLock.classList.remove('hidden');
+            updateUI();
+
+            domainOverlay.classList.remove('pointer-events-none');
+            domainOverlay.classList.add('opacity-95');
+            domainTitle.classList.remove('scale-50', 'opacity-0');
+            domainTitle.classList.add('scale-100', 'opacity-100');
+            domainSub.classList.remove('opacity-0');
+            domainSub.classList.add('opacity-100');
+
+            setTimeout(() => {
+                domainOverlay.classList.add('pointer-events-none');
+                domainOverlay.classList.remove('opacity-95');
+                domainTitle.classList.add('scale-50', 'opacity-0');
+                domainTitle.classList.remove('scale-100', 'opacity-100');
+                domainSub.classList.add('opacity-0');
+                domainSub.classList.remove('opacity-100');
+                domainNotice.classList.remove('hidden');
+            }, 2500);
+
+            // ==========================================
+            // 優化後的領域背景：宇宙黑洞與星環
+            // ==========================================
+            const domainGeo = new THREE.SphereGeometry(85, 32, 32);
+            const domainMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+            domainSphere = new THREE.Mesh(domainGeo, domainMat);
+            domainSphere.position.copy(player.position);
+            scene.add(domainSphere);
+
+            // 核心發光環
+            domainCenterGrp = new THREE.Group();
+            
+            const ring1 = new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 16, 100), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 }));
+            ring1.rotation.x = Math.PI / 2;
+            domainCenterGrp.add(ring1);
+            
+            const ring2 = new THREE.Mesh(new THREE.TorusGeometry(20, 0.8, 16, 100), new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.8 }));
+            ring2.rotation.x = Math.PI / 2.5;
+            domainCenterGrp.add(ring2);
+
+            domainSphere.add(domainCenterGrp);
+
+            // 多層星空粒子
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 600;
+            const starPositions = new Float32Array(starCount * 3);
+            const starColors = new Float32Array(starCount * 3);
+            const color1 = new THREE.Color(0x60a5fa); // 藍
+            const color2 = new THREE.Color(0xc084fc); // 紫
+            const color3 = new THREE.Color(0xffffff); // 白
+
+            for(let i=0; i<starCount; i++) {
+                const radius = 25 + Math.random() * 55;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                starPositions[i*3] = radius * Math.sin(phi) * Math.cos(theta);
+                starPositions[i*3+1] = radius * Math.sin(phi) * Math.sin(theta);
+                starPositions[i*3+2] = radius * Math.cos(phi);
+
+                let mixedColor = Math.random() > 0.6 ? color1 : (Math.random() > 0.3 ? color2 : color3);
+                starColors[i*3] = mixedColor.r;
+                starColors[i*3+1] = mixedColor.g;
+                starColors[i*3+2] = mixedColor.b;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+            const starMat = new THREE.PointsMaterial({ size: 0.6, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            domainInnerParticles = new THREE.Points(starGeo, starMat);
+            domainSphere.add(domainInnerParticles);
+
+            domainLight = new THREE.DirectionalLight(0xa855f7, 3.0);
+            domainLight.position.set(0, 50, 0);
+            scene.add(domainLight);
+            
+            directionalLight.visible = false; 
+            scene.fog.color.setHex(0x000000);
+
+            enemies.forEach(enemy => {
+                enemy.isFrozen = true;
+                enemy.mesh.children[0].material.color.setHex(0x4338ca); 
+            });
+
+            createExplosion(player.position, 0x818cf8, 100, 10.0);
+            cameraShakeTimer = 1.2; cameraShakeIntensity = 0.35;
+        }
+
+        function endDomain() {
+            state.domainActive = false;
+            domainNotice.classList.add('hidden');
+
+            if (domainSphere) { scene.remove(domainSphere); domainSphere = null; domainCenterGrp = null; }
+            if (domainLight) { scene.remove(domainLight); domainLight = null; }
+
+            directionalLight.visible = true;
+            scene.fog.color.setHex(0x020205);
+
+            enemies.forEach(enemy => {
+                enemy.isFrozen = false;
+                enemy.mesh.children[0].material.color.setHex(enemy.originalColor);
+            });
+        }
+
+        // -----------------------------------------------------------------
+        // 物理與遊戲邏輯
+        // -----------------------------------------------------------------
+        function checkMeleeCollision(center, radius, damage, knockbackForce) {
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const enemy = enemies[j];
+                const dist = center.distanceTo(enemy.mesh.position);
+                if (dist < (radius + 1.0 * enemy.scale)) {
+                    damageEnemy(enemy, damage, j);
+                    const pushDir = new THREE.Vector3().subVectors(enemy.mesh.position, player.position).normalize();
+                    pushDir.y = 0.2; 
+                    enemy.mesh.position.addScaledVector(pushDir, knockbackForce);
+                    createExplosion(enemy.mesh.position, 0xfacc15, 12, 0.8);
+                }
+            }
+        }
+
+        function createExplosion(pos, colorHex, count = 20, size = 1.0) {
+            const geo = new THREE.BufferGeometry();
+            const positions = [];
+            const velocities = [];
+            for (let i = 0; i < count; i++) {
+                positions.push(pos.x, pos.y, pos.z);
+                const angle = Math.random() * Math.PI * 2;
+                const speed = (0.5 + Math.random() * 2) * size * 4;
+                const vx = Math.cos(angle) * speed * (Math.random() - 0.5);
+                const vy = (Math.random() - 0.1) * speed;
+                const vz = Math.sin(angle) * speed * (Math.random() - 0.5);
+                velocities.push(vx, vy, vz);
+            }
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: colorHex, size: 0.22 * size, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false });
+            const pSystem = new THREE.Points(geo, mat);
+            scene.add(pSystem);
+            particles.push({ system: pSystem, velocities: velocities, life: 0.8, maxLife: 0.8, initialSize: 0.22 * size });
+        }
+
+        function spawnEnemy() {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 35 + Math.random() * 15;
+            const x = player.position.x + Math.cos(angle) * distance;
+            const z = player.position.z + Math.sin(angle) * distance;
+            const y = 1.4; 
+
+            const enemyGroup = new THREE.Group();
+            enemyGroup.position.set(x, y, z);
+
+            const randType = Math.random();
+            let type = 'normal';
+            let color = 0xef4444;
+            let hp = 30 + state.wave * 8;
+            let speed = 4.2 + Math.random() * 2.5;
+            let scale = 1.0;
+            let damage = 12;
+
+            if (randType > 0.88) {
+                type = 'boss'; color = 0xf59e0b; hp = 110 + state.wave * 35; speed = 3.0; scale = 2.0; damage = 25;
+            } else if (randType > 0.65) {
+                type = 'fast'; color = 0x10b981; hp = 20 + state.wave * 4; speed = 7.5; scale = 0.8; damage = 6;
+            }
+
+            const bodyGeo = new THREE.OctahedronGeometry(1.0 * scale, 1);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.9, metalness: 0.1 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.castShadow = true; body.receiveShadow = true;
+            enemyGroup.add(body);
+
+            const eyeGeo = new THREE.SphereGeometry(0.3 * scale, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(0, 0, 0.8 * scale);
+            body.add(eye);
+            
+            const pupilGeo = new THREE.SphereGeometry(0.12 * scale, 8, 8);
+            const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            pupil.position.set(0, 0, 1.0 * scale);
+            body.add(pupil);
+
+            const ringGeo = new THREE.TorusGeometry(1.2 * scale, 0.08 * scale, 8, 20);
+            const ringMat = new THREE.MeshBasicMaterial({ color: color, wireframe: true });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            enemyGroup.add(ring);
+
+            scene.add(enemyGroup);
+            enemies.push({ mesh: enemyGroup, body: body, type: type, hp: hp, maxHp: hp, speed: speed, damage: damage, originalColor: color, isFrozen: state.domainActive, scale: scale, hitFlashTimer: 0, bobTimer: Math.random() * 100 });
+            createExplosion(enemyGroup.position, color, 12, 1.0);
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            if (!state.gameActive) return;
+
+            const delta = clock.getDelta();
+            
+            // 運鏡平滑過渡處理
+            if (state.cinematicCamera) {
+                currentFov += (targetFov - currentFov) * 10 * delta;
+                camera.fov = currentFov;
+                camera.updateProjectionMatrix();
+                
+                camera.rotation.z += (cinematicRoll - camera.rotation.z) * 10 * delta;
+                
+                if (cinematicYawOffset > 0) {
+                    cinematicYawOffset -= delta * 5;
+                    if (cinematicYawOffset < 0) cinematicYawOffset = 0;
+                }
+            } else {
+                camera.fov = 70;
+                camera.rotation.z = 0;
+                cinematicYawOffset = 0;
+                camera.updateProjectionMatrix();
+            }
+
+            updateCooldownsAndBuffs(delta);
+            updatePlayer(delta);
+            updateProjectiles(delta);
+            updateEnemies(delta);
+            updateParticles(delta);
+
+            if (state.limitlessActive && limitlessVisualMesh) {
+                limitlessVisualMesh.rotation.y += delta * 2;
+                limitlessVisualMesh.rotation.z -= delta * 1;
+                limitlessVisualMesh.material.opacity = 0.35 + Math.sin(clock.elapsedTime * 8) * 0.15;
+                limitlessVisualMesh.scale.setScalar(1.0 + Math.sin(clock.elapsedTime * 15) * 0.03);
+            }
+
+            if (state.surgeActive && playerSurgeAura) {
+                playerSurgeAura.rotation.z += delta * 4;
+            }
+
+            // 領域動態特效
+            if (domainSphere) {
+                domainSphere.rotation.y += delta * 0.05;
+                domainInnerParticles.rotation.x += delta * 0.02;
+                if(domainCenterGrp) {
+                    domainCenterGrp.children[0].rotation.z += delta * 0.5;
+                    domainCenterGrp.children[1].rotation.y -= delta * 0.8;
+                }
+            }
+
+            updateWaves(delta);
+            updateUI();
+            renderer.render(scene, camera);
+        }
+
+        function updateCooldownsAndBuffs(delta) {
+            const cdMultiplier = state.domainActive ? 30.0 : 1.0; 
+            for (let key in state.cooldowns) {
+                if (state.cooldowns[key].current > 0) {
+                    state.cooldowns[key].current -= delta * cdMultiplier;
+                    if (state.cooldowns[key].current < 0) state.cooldowns[key].current = 0;
+                }
+            }
+
+            if (state.domainActive) {
+                state.domainTimer -= delta;
+                if (state.domainTimer <= 0) endDomain();
+            }
+
+            if (state.limitlessActive) {
+                state.limitlessTimer -= delta;
+                if (state.limitlessTimer <= 0) {
+                    state.limitlessActive = false;
+                    limitlessIndicator.classList.add('hidden');
+                    if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; }
+                }
+            }
+
+            if (state.surgeActive) {
+                state.surgeTimer -= delta;
+                if (state.surgeTimer <= 0) {
+                    state.surgeActive = false;
+                    if (playerSurgeAura) { player.remove(playerSurgeAura); playerSurgeAura = null; }
+                }
+            }
+        }
+
+        function updatePlayer(delta) {
+            const baseSpeed = state.surgeActive ? 24.0 : 16.0; 
+            const damping = 10.0;
+            const gravity = 32.0;
+            const jumpHeight = 12.0;
+
+            state.playerVelocity.x -= state.playerVelocity.x * damping * delta;
+            state.playerVelocity.z -= state.playerVelocity.z * damping * delta;
+
+            if (player.position.y > 0) {
+                state.playerVelocity.y -= gravity * delta;
+            } else {
+                state.playerVelocity.y = 0;
+                player.position.y = 0;
+                state.isJumping = false;
+            }
+
+            const activeYaw = mouseYaw + cinematicYawOffset;
+            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeYaw).normalize();
+            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeYaw).normalize();
+
+            let moveDir = new THREE.Vector3();
+            
+            let inputX = state.joystick.x;
+            let inputY = state.joystick.y;
+            
+            if (state.keys.w) inputY = -1;
+            if (state.keys.s) inputY = 1;
+            if (state.keys.a) inputX = -1;
+            if (state.keys.d) inputX = 1;
+
+            if (inputY !== 0) moveDir.addScaledVector(forward, -inputY);
+            if (inputX !== 0) moveDir.addScaledVector(right, inputX);
+
+            const isMoving = moveDir.lengthSq() > 0;
+            if (isMoving) {
+                moveDir.normalize();
+                const speedMult = Math.min(1, Math.sqrt(inputX*inputX + inputY*inputY) || 1);
+                state.playerVelocity.x += moveDir.x * baseSpeed * 8 * delta * speedMult;
+                state.playerVelocity.z += moveDir.z * baseSpeed * 8 * delta * speedMult;
+            }
+
+            if (state.keys.space && !state.isJumping) {
+                state.playerVelocity.y = jumpHeight;
+                state.isJumping = true;
+            }
+
+            player.position.addScaledVector(state.playerVelocity, delta);
+            const limit = 95;
+            player.position.x = Math.max(-limit, Math.min(limit, player.position.x));
+            player.position.z = Math.max(-limit, Math.min(limit, player.position.z));
+            
+            cameraPivot.position.copy(player.position);
+            cameraPivot.position.y += state.playerHeight;
+            
+            cameraPivot.rotation.x = mousePitch;
+            cameraPivot.rotation.y = mouseYaw + cinematicYawOffset;
+            player.rotation.y = mouseYaw;
+
+            // 五條悟模型步行物理動畫
+            if (state.gojoParts && isMoving && !state.isJumping) {
+                const speed = 15;
+                state.gojoParts.leftArm.rotation.x = Math.sin(clock.elapsedTime * speed) * 0.5;
+                state.gojoParts.rightArm.rotation.x = -Math.sin(clock.elapsedTime * speed) * 0.5;
+                state.gojoParts.leftLeg.rotation.x = -Math.sin(clock.elapsedTime * speed) * 0.6;
+                state.gojoParts.rightLeg.rotation.x = Math.sin(clock.elapsedTime * speed) * 0.6;
+            } else if (state.gojoParts) {
+                state.gojoParts.leftArm.rotation.x = 0;
+                state.gojoParts.rightArm.rotation.x = 0;
+                state.gojoParts.leftLeg.rotation.x = 0;
+                state.gojoParts.rightLeg.rotation.x = 0;
+            }
+
+            if (cameraShakeTimer > 0) {
+                cameraShakeTimer -= delta;
+                cameraPivot.position.x += (Math.random() - 0.5) * cameraShakeIntensity;
+                cameraPivot.position.y += (Math.random() - 0.5) * cameraShakeIntensity;
+                cameraPivot.position.z += (Math.random() - 0.5) * cameraShakeIntensity;
+            }
+        }
+
+        function updateProjectiles(delta) {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.life -= delta;
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    if(p.shock) scene.remove(p.shock);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                if (p.type === 'melee_kick') { p.mesh.scale.addScalar(delta * 2.5); continue; }
+                if (p.type === 'melee_punch') { 
+                    p.mesh.scale.addScalar(delta * 4.0); 
+                    if(p.shock) { p.shock.scale.addScalar(delta * 6.0); p.shock.material.opacity = p.life * 4; }
+                    continue; 
+                }
+
+                if (p.type === 'red' || p.type === 'purple') {
+                    p.mesh.position.addScaledVector(p.dir, p.speed * delta);
+                    
+                    if (p.type === 'red' && p.shockwave) {
+                        p.shockwave.scale.addScalar(delta * 2.0); // 赫的物理環擴展
+                    }
+
+                    if (p.type === 'purple') {
+                        p.coreMesh.rotation.y += delta * 4;
+                        p.outerMesh.rotation.x -= delta * 2;
+                        p.outerMesh.rotation.z += delta * 3;
+                        createExplosion(p.mesh.position, 0xa855f7, 3, 0.7);
+                        cameraShakeTimer = 0.1; cameraShakeIntensity = 0.08;
+                    }
+
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const enemy = enemies[j];
+                        const dist = p.mesh.position.distanceTo(enemy.mesh.position);
+
+                        if (dist < (p.radius + 1.2 * enemy.scale)) {
+                            damageEnemy(enemy, p.damage, j);
+
+                            if (p.type === 'red') {
+                                const pushDir = new THREE.Vector3().subVectors(enemy.mesh.position, p.mesh.position).normalize();
+                                pushDir.y = 0.2;
+                                enemy.mesh.position.addScaledVector(pushDir, 20); // 赫的高強物理推力
+                                createExplosion(enemy.mesh.position, 0xef4444, 15, 1.2);
+                            }
+
+                            if (p.type !== 'purple') {
+                                createExplosion(p.mesh.position, 0xef4444, 12, 0.8);
+                                scene.remove(p.mesh);
+                                projectiles.splice(i, 1);
+                                break; 
+                            } else {
+                                createExplosion(enemy.mesh.position, 0xa855f7, 8, 1.5);
+                            }
+                        }
+                    }
+                } 
+                else if (p.type === 'blue') {
+                    p.pulseTimer += delta;
+                    p.mesh.rotation.z += delta * 3;
+
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const enemy = enemies[j];
+                        const dist = p.point.distanceTo(enemy.mesh.position);
+
+                        if (dist < p.radius) {
+                            const pullDir = new THREE.Vector3().subVectors(p.point, enemy.mesh.position);
+                            // 強化的物理吸力
+                            const pullForce = (1.0 - (dist / p.radius)) * 25.0 * delta; 
+                            if (dist > 1.2) enemy.mesh.position.addScaledVector(pullDir.normalize(), pullForce);
+                            
+                            damageEnemy(enemy, p.damage, j);
+                            if (Math.random() < 0.35) createExplosion(enemy.mesh.position, 0x3b82f6, 4, 0.7);
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateEnemies(delta) {
+            const playerCollisionRadius = 1.6;
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+
+                if (enemy.hitFlashTimer > 0) {
+                    enemy.hitFlashTimer -= delta;
+                    if (enemy.hitFlashTimer <= 0) enemy.mesh.children[0].material.color.setHex(enemy.isFrozen ? 0x4338ca : enemy.originalColor);
+                }
+
+                if (enemy.isFrozen) {
+                    enemy.mesh.position.x += (Math.random() - 0.5) * 0.02;
+                    enemy.mesh.position.z += (Math.random() - 0.5) * 0.02;
+                    continue;
+                }
+
+                enemy.bobTimer += delta * 3.2;
+                enemy.mesh.position.y = 1.1 + Math.sin(enemy.bobTimer) * 0.25 * enemy.scale;
+                enemy.body.rotation.y += delta * 0.8;
+                enemy.body.rotation.x += delta * 0.4;
+
+                const dir = new THREE.Vector3().subVectors(player.position, enemy.mesh.position);
+                dir.y = 0; 
+                const dist = dir.length();
+                dir.normalize();
+
+                enemy.mesh.position.addScaledVector(dir, enemy.speed * delta);
+
+                if (dist < playerCollisionRadius + 0.8 * enemy.scale) {
+                    damagePlayer(enemy.damage);
+                    enemy.mesh.position.addScaledVector(dir, -4.5); 
+                    createExplosion(player.position, 0xef4444, 10, 0.8);
+                }
+            }
+        }
+
+        function updateParticles(delta) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= delta;
+
+                if (p.life <= 0) {
+                    scene.remove(p.system);
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                const posAttr = p.system.geometry.attributes.position;
+                const arr = posAttr.array;
+                for (let j = 0; j < posAttr.count; j++) {
+                    arr[j * 3] += p.velocities[j * 3] * delta;
+                    arr[j * 3 + 1] += p.velocities[j * 3 + 1] * delta;
+                    arr[j * 3 + 2] += p.velocities[j * 3 + 2] * delta;
+                    p.velocities[j * 3 + 1] -= 2.0 * delta; 
+                }
+                posAttr.needsUpdate = true;
+                
+                const progress = p.life / p.maxLife;
+                p.system.material.opacity = progress;
+                p.system.material.size = p.initialSize * (0.1 + 0.9 * Math.pow(progress, 0.5));
+            }
+        }
+
+        function damageEnemy(enemy, dmg, index) {
+            enemy.hp -= dmg;
+            enemy.mesh.children[0].material.color.setHex(0xffffff);
+            enemy.hitFlashTimer = 0.12;
+
+            if (enemy.hp <= 0) {
+                createExplosion(enemy.mesh.position, enemy.originalColor, 35, 1.8 * enemy.scale);
+                scene.remove(enemy.mesh);
+                enemies.splice(index, 1);
+                state.kills++;
+                
+                let gain = enemy.type === 'boss' ? 30 : 10;
+                state.domainProgress = Math.min(100, state.domainProgress + gain);
+
+                // 勝利判定
+                if (state.kills >= state.targetKills && !state.gameWon) {
+                    triggerVictory();
+                }
+            }
+        }
+
+        function damagePlayer(dmg) {
+            if (state.domainActive || state.limitlessActive || state.gameWon) return; 
+
+            state.hp = Math.max(0, state.hp - dmg);
+            cameraShakeTimer = 0.3;
+            cameraShakeIntensity = 0.25;
+
+            if (state.hp <= 0) endGame();
+        }
+
+        let waveTimer = 0;
+        function updateWaves(delta) {
+            if (state.gameWon) return;
+            waveTimer += delta;
+            if (enemies.length === 0 || waveTimer > 20) {
+                waveTimer = 0;
+                if (enemies.length === 0) state.wave++;
+                for (let i = 0; i < 4 + state.wave * 2; i++) spawnEnemy();
+            }
+        }
+
+        function updateUI() {
+            const hpPct = (state.hp / state.maxHp) * 100;
+            hpBar.style.width = `${hpPct}%`;
+            hpText.innerText = `${Math.ceil(state.hp)} / ${state.maxHp}`;
+            killCountEl.innerText = state.kills;
+            waveCountEl.innerText = state.wave;
+            deBar.style.width = `${state.domainProgress}%`;
+            deText.innerText = `${state.domainProgress}%`;
+
+            if (state.domainProgress >= 100 && !state.domainActive) {
+                btnS10.disabled = false;
+                domainLock.classList.add('hidden');
+                document.getElementById('domain-btn-box').classList.add('animate-pulse', 'border-indigo-400');
+            } else {
+                if (!state.domainActive) {
+                    btnS10.disabled = true;
+                    domainLock.classList.remove('hidden');
+                    document.getElementById('domain-btn-box').classList.remove('animate-pulse', 'border-indigo-400');
+                }
+            }
+
+            updateSkillButtonCD('skill1', cdOverlay1, cdTxt1);
+            updateSkillButtonCD('skill2', cdOverlay2, cdTxt2);
+            updateSkillButtonCD('skill3', cdOverlay3, cdTxt3);
+            updateSkillButtonCD('skill4', cdOverlay4, cdTxt4);
+            updateSkillButtonCD('skill5', cdOverlay5, cdTxt5);
+            updateSkillButtonCD('skill6', cdOverlay6, cdTxt6);
+            updateSkillButtonCD('skill7', cdOverlay7, cdTxt7);
+            updateSkillButtonCD('skill8', cdOverlay8, cdTxt8);
+            updateSkillButtonCD('skill9', cdOverlay9, cdTxt9);
+        }
+
+        function updateSkillButtonCD(skillKey, overlayEl, textEl) {
+            const cd = state.cooldowns[skillKey];
+            if (cd.current > 0) {
+                overlayEl.classList.remove('opacity-0');
+                overlayEl.classList.add('opacity-100');
+                textEl.innerText = `${cd.current.toFixed(1)}s`;
+            } else {
+                overlayEl.classList.remove('opacity-100');
+                overlayEl.classList.add('opacity-0');
+            }
+        }
+
+        function startGame() {
+            modalContainer.classList.add('hidden');
+            startModal.classList.add('hidden');
+            gameoverModal.classList.add('hidden');
+            victoryModal.classList.add('hidden');
+            
+            state.gameActive = true;
+            state.gameWon = false;
+            state.hp = 100; state.kills = 0; state.wave = 1; state.domainProgress = 0;
+            state.domainActive = false; state.limitlessActive = false; state.surgeActive = false;
+            
+            enemies.forEach(e => scene.remove(e.mesh)); projectiles.forEach(p => scene.remove(p.mesh)); particles.forEach(p => scene.remove(p.system));
+            enemies = []; projectiles = []; particles = [];
+
+            if (domainSphere) { scene.remove(domainSphere); domainSphere = null; domainCenterGrp = null; }
+            if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; }
+            if (playerSurgeAura) { player.remove(playerSurgeAura); playerSurgeAura = null; }
+
+            player.position.set(0, 0, 0);
+            updateCameraViewPosition();
+            mouseYaw = 0; mousePitch = 0;
+
+            for (let key in state.cooldowns) state.cooldowns[key].current = 0;
+
+            if (!state.mobileMode) renderer.domElement.requestPointerLock();
+            for (let i = 0; i < 4; i++) spawnEnemy();
+            clock.getDelta(); 
+        }
+
+        function endGame() {
+            state.gameActive = false;
+            document.exitPointerLock();
+            modalContainer.classList.remove('hidden');
+            gameoverModal.classList.remove('hidden');
+            document.getElementById('end-kills').innerText = state.kills;
+        }
+
+        function triggerVictory() {
+            state.gameWon = true;
+            state.gameActive = false;
+            document.exitPointerLock();
+            modalContainer.classList.remove('hidden');
+            victoryModal.classList.remove('hidden');
+            
+            // 勝利煙火特效
+            createExplosion(player.position, 0xfacc15, 100, 5.0);
+            createExplosion(new THREE.Vector3(player.position.x+5, 5, player.position.z+5), 0x60a5fa, 50, 3.0);
+            createExplosion(new THREE.Vector3(player.position.x-5, 5, player.position.z-5), 0xef4444, 50, 3.0);
+        }
+
+        window.onload = function() {
+            initEngine();
+            gameLoop();
+
+            startGameBtn.addEventListener('click', startGame);
+            restartGameBtn.addEventListener('click', startGame);
+            victoryRestartBtn.addEventListener('click', startGame);
+            
+            viewToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleCameraView(); });
+
+            settingsBtn.addEventListener('click', () => {
+                if(state.gameActive && !state.mobileMode) document.exitPointerLock();
+                modalContainer.classList.remove('hidden');
+                settingsModal.classList.remove('hidden');
+                startModal.classList.add('hidden');
+                gameoverModal.classList.add('hidden');
+                victoryModal.classList.add('hidden');
+                state.gameActive = false; 
+            });
+
+            closeSettingsBtn.addEventListener('click', () => {
+                applySettings();
+                modalContainer.classList.add('hidden');
+                settingsModal.classList.add('hidden');
+                if(!state.gameWon && state.hp > 0) state.gameActive = true;
+                clock.getDelta(); 
+            });
+            
+            toggleCinematic.addEventListener('change', applySettings);
+            toggleMobile.addEventListener('change', applySettings);
+
+            const bindSkill = (btn, func) => {
+                btn.addEventListener('mousedown', (e) => { e.stopPropagation(); func(); });
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); func(); }, {passive: false});
+            };
+
+            bindSkill(btnS1, triggerPunch);
+            bindSkill(btnS2, triggerKick);
+            bindSkill(btnS3, triggerSkillBlue);
+            bindSkill(btnS4, triggerSkillRed);
+            bindSkill(btnS5, triggerSkillPurple);
+            bindSkill(btnS6, triggerLimitless);
+            bindSkill(btnS7, triggerTeleport);
+            bindSkill(btnS8, triggerHeal);
+            bindSkill(btnS9, triggerSurge);
+            bindSkill(btnS10, triggerSkillDomain);
+        }
+    </script>
+</body>
+</html>
