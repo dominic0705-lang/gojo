@@ -71,7 +71,7 @@
         </div>
     </div>
 
-    <!-- 頂部資訊列：生命值、擊殺數、領域計量條 (響應式優化) -->
+    <!-- 頂部資訊列：生命值、擊殺數 -->
     <div class="absolute top-2 md:top-4 left-2 right-2 md:left-4 md:right-4 z-20 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4 pointer-events-none">
         
         <!-- 玩家狀態 -->
@@ -88,7 +88,7 @@
             </div>
             <!-- 無下限狀態標籤 -->
             <div id="limitless-indicator" class="hidden px-1.5 py-0.5 md:px-2.5 md:py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-[9px] md:text-xs font-bold rounded-lg animate-pulse whitespace-nowrap">
-                無下限
+                無下限開啟
             </div>
         </div>
 
@@ -104,21 +104,10 @@
             </div>
         </div>
 
-        <!-- 領域展開能量與頂部按鈕區 -->
+        <!-- 頂部按鈕區 -->
         <div class="flex items-center justify-between w-full md:w-auto gap-2 md:gap-3 pointer-events-auto">
-            
-            <div class="bg-black/80 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-xl border border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)] flex-grow md:flex-grow-0">
-                <span class="text-[10px] md:text-xs font-bold text-indigo-400 tracking-wider flex justify-between">
-                    <span>領域能量 (LIMIT)</span>
-                    <span id="de-text" class="text-indigo-300 font-black">0%</span>
-                </span>
-                <div class="w-full md:w-48 h-2 md:h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700 mt-0.5 md:mt-1">
-                    <div id="de-bar" class="h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 w-0 transition-all duration-300"></div>
-                </div>
-            </div>
-            
             <!-- 視角與設定按鈕 -->
-            <div class="flex gap-1 md:gap-2">
+            <div class="flex gap-1 md:gap-2 ml-auto">
                 <button id="view-toggle-btn" class="bg-zinc-900/80 border border-zinc-600 text-white w-10 h-10 md:w-12 md:px-4 md:h-12 flex items-center justify-center rounded-xl hover:bg-zinc-700 transition-colors shadow-lg active:scale-95 text-xs md:text-sm font-bold">
                     <i class="fa-solid fa-camera"></i> <span class="hidden md:inline ml-2">視角(V)</span>
                 </button>
@@ -164,19 +153,19 @@
     <div class="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 w-full max-w-5xl px-2 md:px-4 pointer-events-none">
         
         <div id="domain-active-notice" class="hidden bg-indigo-900/90 backdrop-blur-md px-4 py-1.5 md:px-6 md:py-2 rounded-full border-2 border-indigo-400 text-indigo-100 text-xs md:text-base font-black tracking-widest animate-bounce shadow-[0_0_20px_rgba(99,102,241,0.6)] text-center w-max">
-            「無量空處」展開 - 技能無冷卻！
+            「無量空處」展開中！
         </div>
 
         <div class="bg-black/85 backdrop-blur-xl p-2 md:p-3.5 rounded-2xl border-2 border-zinc-700 flex flex-wrap items-center justify-center gap-1.5 md:gap-2.5 w-full pointer-events-auto shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
             
-            <!-- 1: 拳頭 -->
+            <!-- 1: 咒力拳頭 (可左鍵) -->
             <button id="skill-1-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
                 <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden shadow-inner group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">1</div>
+                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">L/1</div>
                     <i class="fa-solid fa-hand-fist text-yellow-500 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
                     <div id="cooldown-1" class="absolute inset-0 bg-black/80 flex items-center justify-center text-yellow-500 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-1-txt">0s</span></div>
                 </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">拳</span>
+                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">咒力拳頭</span>
             </button>
 
             <!-- 2: 踢 -->
@@ -219,14 +208,14 @@
                 <span class="text-[9px] md:text-[11px] font-bold text-purple-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">茈</span>
             </button>
 
-            <!-- 6: 無下限 -->
+            <!-- 6: 無下限 (開關) -->
             <button id="skill-6-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
                 <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-cyan-950/80 border border-cyan-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(8,145,178,0.2)] group-hover:border-cyan-400">
                     <div class="absolute top-0 left-0 bg-cyan-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">6</div>
                     <i class="fa-solid fa-shield-halved text-cyan-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
                     <div id="cooldown-6" class="absolute inset-0 bg-black/80 flex items-center justify-center text-cyan-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-6-txt">0s</span></div>
                 </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-cyan-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">無下限</span>
+                <span class="text-[9px] md:text-[11px] font-bold text-cyan-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">開關無下限</span>
             </button>
 
             <!-- 7: 瞬移 -->
@@ -260,13 +249,14 @@
             </button>
 
             <!-- 10: 領域展開 -->
-            <button id="skill-10-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90 disabled:opacity-30" disabled>
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-indigo-950/90 border-2 border-indigo-700 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(67,56,202,0.5)]" id="domain-btn-box">
+            <button id="skill-10-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
+                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-indigo-950/90 border-2 border-indigo-700 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(67,56,202,0.5)] animate-pulse" id="domain-btn-box">
                     <div class="absolute top-0 left-0 bg-indigo-800 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">0</div>
                     <i class="fa-solid fa-eye text-indigo-300 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="domain-lock" class="absolute inset-0 bg-black/70 flex items-center justify-center text-gray-300 text-xs md:text-sm z-20 backdrop-blur-[2px]">
+                    <div id="domain-lock" class="absolute inset-0 bg-black/70 flex items-center justify-center text-gray-300 text-xs md:text-sm z-20 backdrop-blur-[2px] hidden">
                         <i class="fa-solid fa-lock"></i>
                     </div>
+                    <div id="cooldown-10" class="absolute inset-0 bg-black/80 flex items-center justify-center text-indigo-300 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-10-txt">0s</span></div>
                 </div>
                 <span class="text-[9px] md:text-[11px] font-bold text-indigo-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">領域</span>
             </button>
@@ -276,7 +266,8 @@
         <!-- 操作說明 (電腦版顯示) -->
         <div class="text-[10px] md:text-[11px] text-gray-400 hidden sm:flex flex-wrap justify-center gap-x-4 gap-y-1 bg-black/50 px-4 py-1.5 rounded-full mt-1">
             <span><strong class="text-white">視角：</strong>V 鍵</span>
-            <span><strong class="text-white">移動：</strong>滑鼠+WASD</span>
+            <span><strong class="text-white">攻擊：</strong>滑鼠左鍵</span>
+            <span><strong class="text-white">移動：</strong>WASD</span>
             <span><strong class="text-white">跳躍：</strong>空白鍵</span>
             <span><strong class="text-white">招式：</strong>數字鍵 1~0</span>
         </div>
@@ -292,14 +283,14 @@
             
             <div class="w-full text-left bg-zinc-900/60 p-3 md:p-4 rounded-xl border border-zinc-800 mb-4 md:mb-6 text-[10px] md:text-xs text-gray-300 space-y-2 max-h-[35vh] sm:max-h-[320px] overflow-y-auto">
                 <h3 class="font-bold text-white text-xs md:text-sm border-b border-zinc-800 pb-1.5 flex items-center gap-2 sticky top-0 bg-zinc-900 py-1 z-10">
-                    <i class="fa-solid fa-circle-info text-blue-400"></i> 技能對照表：
+                    <i class="fa-solid fa-circle-info text-blue-400"></i> 技能對照表 (全招式 0.5s 冷卻)：
                 </h3>
-                <p><span class="text-yellow-500 font-bold">[1] 拳</span>: 空間震盪重拳。<span class="text-orange-500 font-bold ml-2">[2] 踢</span>: 物理擊退側踢。</p>
+                <p><span class="text-yellow-500 font-bold">[左鍵 / 1] 咒力拳頭</span>: 空間震盪重拳。<span class="text-orange-500 font-bold ml-2">[2] 踢</span>: 物理擊退側踢。</p>
                 <p><span class="text-blue-400 font-bold">[3] 蒼</span>: 引力黑洞。<span class="text-red-400 font-bold ml-2">[4] 赫</span>: 發射排斥衝擊波。</p>
-                <p><span class="text-purple-400 font-bold">[5] 茈</span>: 穿透性紫色極光。<span class="text-cyan-300 font-bold ml-2">[6] 無下限</span>: 免疫傷害。</p>
+                <p><span class="text-purple-400 font-bold">[5] 茈</span>: 穿透性紫色極光。<span class="text-cyan-300 font-bold ml-2">[6] 無下限</span>: 開關式無敵防禦。</p>
                 <p><span class="text-teal-400 font-bold">[7] 瞬移</span>: 瞬間移動。<span class="text-emerald-400 font-bold ml-2">[8] 反轉</span>: 回復HP。</p>
                 <p><span class="text-pink-500 font-bold">[9] 爆發</span>: 提升跑速與傷害。<span class="text-indigo-400 font-bold ml-2">[0] 領域</span>: 無量空處。</p>
-                <p class="mt-2 pt-2 border-t border-zinc-800 text-yellow-300 font-bold"><i class="fa-solid fa-mobile-screen"></i> 點擊右上角設定，可開啟手機專屬觸控模式！</p>
+                <p class="mt-2 pt-2 border-t border-zinc-800 text-yellow-300 font-bold"><i class="fa-solid fa-bolt"></i> 提示：招式無需能量，盡情釋放你的咒力吧！</p>
             </div>
 
             <button id="start-game-btn" class="w-full py-3 md:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-xl font-bold text-sm md:text-base hover:from-blue-500 hover:to-purple-500 transition-all active:scale-95 shadow-[0_0_20px_rgba(99,102,241,0.4)]">
@@ -376,14 +367,14 @@
             kills: 0,
             targetKills: 50,
             wave: 1,
-            domainProgress: 0, 
+            
+            // 領域狀態
             domainActive: false,
             domainTimer: 0,
             domainDuration: 12, 
             
+            // 無下限狀態 (Toggle 模式)
             limitlessActive: false,
-            limitlessTimer: 0,
-            limitlessDuration: 5, 
             
             surgeActive: false,
             surgeTimer: 0,
@@ -396,17 +387,18 @@
             chargeSkill: null,
             chargePose: null,
 
+            // 所有技能冷卻設定為 0.5 秒
             cooldowns: {
-                skill1: { current: 0, max: 0.4 },   
-                skill2: { current: 0, max: 0.9 },   
-                skill3: { current: 0, max: 5 },     
-                skill4: { current: 0, max: 7 },     
-                skill5: { current: 0, max: 12 },    
-                skill6: { current: 0, max: 14 },    
-                skill7: { current: 0, max: 2 },     
-                skill8: { current: 0, max: 10 },    
-                skill9: { current: 0, max: 15 },    
-                skill10: { current: 0, max: 0 }     
+                skill1: { current: 0, max: 0.5 },   
+                skill2: { current: 0, max: 0.5 },   
+                skill3: { current: 0, max: 0.5 },     
+                skill4: { current: 0, max: 0.5 },     
+                skill5: { current: 0, max: 0.5 },    
+                skill6: { current: 0, max: 0.5 },    
+                skill7: { current: 0, max: 0.5 },     
+                skill8: { current: 0, max: 0.5 },    
+                skill9: { current: 0, max: 0.5 },    
+                skill10: { current: 0, max: 0.5 }     
             },
             
             keys: { w: false, a: false, s: false, d: false, space: false },
@@ -465,8 +457,6 @@
         const hpText = document.getElementById('hp-text');
         const killCountEl = document.getElementById('kill-count');
         const waveCountEl = document.getElementById('wave-count');
-        const deBar = document.getElementById('de-bar');
-        const deText = document.getElementById('de-text');
         const limitlessIndicator = document.getElementById('limitless-indicator');
         const mobileKillCount = document.getElementById('mobile-kill-count');
         const mobileWaveCount = document.getElementById('mobile-wave-count');
@@ -771,28 +761,24 @@
             state.chargeSkill = skillId;
             state.chargePose = pose;
 
-            showAnimeSkillName(name, color);
+            if(name) showAnimeSkillName(name, color);
             
-            // 創建蓄力聚能特效
-            chargeGroup = new THREE.Group();
-            player.add(chargeGroup);
+            if(duration > 0.1) { // 時間太短的(如普攻)就不顯示太誇張的聚氣圈
+                chargeGroup = new THREE.Group();
+                player.add(chargeGroup);
+                const auraMat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.6 });
+                const aura = new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 12), auraMat);
+                chargeGroup.add(aura);
 
-            // 旋轉發光環
-            const auraMat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.6 });
-            const aura = new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 12), auraMat);
-            chargeGroup.add(aura);
+                const pGeo = new THREE.BufferGeometry();
+                const pPos = [];
+                for(let i=0; i<60; i++) pPos.push((Math.random()-0.5)*8, (Math.random()-0.5)*8 + 1.0, (Math.random()-0.5)*8);
+                pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+                const pSys = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: color, size: 0.15, transparent: true, blending: THREE.AdditiveBlending }));
+                chargeGroup.add(pSys);
 
-            // 向內收束的粒子
-            const pGeo = new THREE.BufferGeometry();
-            const pPos = [];
-            for(let i=0; i<60; i++) {
-                pPos.push((Math.random()-0.5)*8, (Math.random()-0.5)*8 + 1.0, (Math.random()-0.5)*8);
+                chargeGroup.userData = { aura: aura, pSys: pSys, pPos: pPos };
             }
-            pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-            const pSys = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: color, size: 0.15, transparent: true, blending: THREE.AdditiveBlending }));
-            chargeGroup.add(pSys);
-
-            chargeGroup.userData = { aura: aura, pSys: pSys, pPos: pPos };
         }
 
         function applyChargePose() {
@@ -825,7 +811,6 @@
                 if (chargeGroup) {
                     chargeGroup.userData.aura.rotation.y += delta * 6;
                     chargeGroup.userData.aura.scale.setScalar(0.5 + (state.chargeTimer / state.chargeMaxTimer) * 1.5);
-                    
                     const arr = chargeGroup.userData.pSys.geometry.attributes.position.array;
                     for(let i=0; i<60; i++) {
                         arr[i*3] -= arr[i*3] * delta * 5;
@@ -842,7 +827,6 @@
                     if(chargeGroup) { player.remove(chargeGroup); chargeGroup = null; }
                     resetPose();
                     
-                    // 執行招式
                     if(state.chargeSkill === 1) executePunch();
                     else if(state.chargeSkill === 2) executeKick();
                     else if(state.chargeSkill === 3) executeSkillBlue();
@@ -858,12 +842,12 @@
         }
 
         // -----------------------------------------------------------------
-        // 5. 1~10 招式觸發與實作 (Trigger -> Charge -> Execute)
+        // 5. 1~10 招式觸發與實作
         // -----------------------------------------------------------------
         function triggerPunch() {
             if (state.cooldowns.skill1.current > 0 || state.isCharging) return;
             state.cooldowns.skill1.current = state.cooldowns.skill1.max;
-            startCharge(1, 0.2, '體術・拳', '#facc15', 'punch');
+            startCharge(1, 0.1, '咒力拳頭', '#facc15', 'punch');
         }
         function executePunch() {
             const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos); 
@@ -902,7 +886,7 @@
         function triggerSkillBlue() {
             if (state.cooldowns.skill3.current > 0 || state.isCharging) return;
             state.cooldowns.skill3.current = state.cooldowns.skill3.max;
-            startCharge(3, 0.6, '術式順轉「蒼」', '#3b82f6', 'blue');
+            startCharge(3, 0.4, '術式順轉「蒼」', '#3b82f6', 'blue');
         }
         function executeSkillBlue() {
             if (state.cinematicCamera) { targetFov = 95; setTimeout(() => targetFov = 70, 400); }
@@ -930,7 +914,7 @@
         function triggerSkillRed() {
             if (state.cooldowns.skill4.current > 0 || state.isCharging) return;
             state.cooldowns.skill4.current = state.cooldowns.skill4.max;
-            startCharge(4, 0.6, '術式反轉「赫」', '#ef4444', 'red');
+            startCharge(4, 0.4, '術式反轉「赫」', '#ef4444', 'red');
         }
         function executeSkillRed() {
             if (state.cinematicCamera) { targetFov = 50; setTimeout(() => targetFov = 70, 300); }
@@ -953,7 +937,7 @@
         function triggerSkillPurple() {
             if (state.cooldowns.skill5.current > 0 || state.isCharging) return;
             state.cooldowns.skill5.current = state.cooldowns.skill5.max;
-            startCharge(5, 1.2, '虛式「茈」', '#a855f7', 'purple');
+            startCharge(5, 0.6, '虛式「茈」', '#a855f7', 'purple');
         }
         function executeSkillPurple() {
             if (state.cinematicCamera) { targetFov = 130; cinematicRoll = -0.15; setTimeout(() => { targetFov = 70; cinematicRoll = 0; }, 600); }
@@ -974,13 +958,24 @@
             cameraShakeTimer = 0.7; cameraShakeIntensity = 0.3;
         }
 
+        // 開關式無下限防禦
         function triggerLimitless() {
             if (state.cooldowns.skill6.current > 0 || state.isCharging) return;
             state.cooldowns.skill6.current = state.cooldowns.skill6.max;
-            startCharge(6, 0.4, '無下限咒術', '#22d3ee', 'domain');
+            
+            if (state.limitlessActive) {
+                // 關閉無下限
+                state.limitlessActive = false;
+                limitlessIndicator.classList.add('hidden');
+                if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; }
+                showAnimeSkillName('無下限解除', '#9ca3af');
+            } else {
+                // 開啟無下限
+                startCharge(6, 0.2, '無下限咒術', '#22d3ee', 'domain');
+            }
         }
         function executeLimitless() {
-            state.limitlessActive = true; state.limitlessTimer = state.limitlessDuration;
+            state.limitlessActive = true;
             limitlessIndicator.classList.remove('hidden');
             limitlessVisualMesh = new THREE.Mesh(new THREE.SphereGeometry(2.0, 32, 32), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.35, wireframe: true }));
             player.add(limitlessVisualMesh);
@@ -990,7 +985,7 @@
         function triggerTeleport() {
             if (state.cooldowns.skill7.current > 0 || state.isCharging) return;
             state.cooldowns.skill7.current = state.cooldowns.skill7.max;
-            startCharge(7, 0.15, '瞬移', '#2dd4bf', 'blue');
+            startCharge(7, 0.1, '瞬移', '#2dd4bf', 'blue');
         }
         function executeTeleport() {
             const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
@@ -1005,7 +1000,7 @@
         function triggerHeal() {
             if (state.cooldowns.skill8.current > 0 || state.hp >= state.maxHp || state.isCharging) return;
             state.cooldowns.skill8.current = state.cooldowns.skill8.max;
-            startCharge(8, 0.8, '反轉術式', '#34d399', 'heal');
+            startCharge(8, 0.4, '反轉術式', '#34d399', 'heal');
         }
         function executeHeal() {
             state.hp = Math.min(state.maxHp, state.hp + 40);
@@ -1015,7 +1010,7 @@
         function triggerSurge() {
             if (state.cooldowns.skill9.current > 0 || state.isCharging) return;
             state.cooldowns.skill9.current = state.cooldowns.skill9.max;
-            startCharge(9, 1.0, '咒力爆發', '#ec4899', 'surge');
+            startCharge(9, 0.5, '咒力爆發', '#ec4899', 'surge');
         }
         function executeSurge() {
             state.surgeActive = true; state.surgeTimer = state.surgeDuration;
@@ -1026,15 +1021,13 @@
         }
 
         function triggerSkillDomain() {
-            if (state.domainProgress < 100 || state.domainActive || state.isCharging) return;
-            startCharge(10, 1.5, '領域展開', '#ffffff', 'domain');
+            if (state.domainActive || state.isCharging || state.cooldowns.skill10.current > 0) return;
+            state.cooldowns.skill10.current = state.cooldowns.skill10.max;
+            startCharge(10, 1.0, '領域展開', '#ffffff', 'domain');
         }
         function executeDomain() {
-            state.domainActive = true; state.domainProgress = 0; state.domainTimer = state.domainDuration;
-            
+            state.domainActive = true; state.domainTimer = state.domainDuration;
             if (state.cinematicCamera) { cinematicYawOffset = Math.PI * 2; targetFov = 110; setTimeout(() => targetFov = 70, 1500); }
-
-            btnS10.disabled = true; domainLock.classList.remove('hidden'); updateUI();
 
             domainOverlay.classList.remove('pointer-events-none'); domainOverlay.classList.add('opacity-95');
             domainTitle.classList.remove('scale-50', 'opacity-0'); domainTitle.classList.add('scale-100', 'opacity-100');
@@ -1192,12 +1185,10 @@
         }
 
         function updateCooldownsAndBuffs(delta) {
-            const cdMultiplier = state.domainActive ? 30.0 : 1.0; 
             for (let key in state.cooldowns) {
-                if (state.cooldowns[key].current > 0) { state.cooldowns[key].current -= delta * cdMultiplier; if (state.cooldowns[key].current < 0) state.cooldowns[key].current = 0; }
+                if (state.cooldowns[key].current > 0) { state.cooldowns[key].current -= delta; if (state.cooldowns[key].current < 0) state.cooldowns[key].current = 0; }
             }
             if (state.domainActive) { state.domainTimer -= delta; if (state.domainTimer <= 0) endDomain(); }
-            if (state.limitlessActive) { state.limitlessTimer -= delta; if (state.limitlessTimer <= 0) { state.limitlessActive = false; limitlessIndicator.classList.add('hidden'); if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; } } }
             if (state.surgeActive) { state.surgeTimer -= delta; if (state.surgeTimer <= 0) { state.surgeActive = false; if (playerSurgeAura) { player.remove(playerSurgeAura); playerSurgeAura = null; } } }
         }
 
@@ -1317,7 +1308,7 @@
             enemy.hp -= dmg; enemy.mesh.children[0].material.color.setHex(0xffffff); enemy.hitFlashTimer = 0.12;
             if (enemy.hp <= 0) {
                 createExplosion(enemy.mesh.position, enemy.originalColor, 35, 1.8 * enemy.scale); scene.remove(enemy.mesh); enemies.splice(index, 1);
-                state.kills++; let gain = enemy.type === 'boss' ? 30 : 10; state.domainProgress = Math.min(100, state.domainProgress + gain);
+                state.kills++;
                 if (state.kills >= state.targetKills && !state.gameWon) triggerVictory();
             }
         }
@@ -1344,20 +1335,16 @@
         function updateUI() {
             hpBar.style.width = `${(state.hp / state.maxHp) * 100}%`; hpText.innerText = `${Math.ceil(state.hp)}/100`;
             killCountEl.innerText = state.kills; waveCountEl.innerText = state.wave;
-            deBar.style.width = `${state.domainProgress}%`; deText.innerText = `${state.domainProgress}%`;
-            
             mobileKillCount.innerText = state.kills; mobileWaveCount.innerText = state.wave;
-
-            if (state.domainProgress >= 100 && !state.domainActive) { btnS10.disabled = false; domainLock.classList.add('hidden'); document.getElementById('domain-btn-box').classList.add('animate-pulse', 'border-indigo-400'); }
-            else if (!state.domainActive) { btnS10.disabled = true; domainLock.classList.remove('hidden'); document.getElementById('domain-btn-box').classList.remove('animate-pulse', 'border-indigo-400'); }
 
             for(let i=1; i<=10; i++) updateSkillButtonCD(`skill${i}`, document.getElementById(`cooldown-${i}`), document.getElementById(`cooldown-${i}-txt`));
         }
 
         function startGame() {
             modalContainer.classList.add('hidden'); startModal.classList.add('hidden'); gameoverModal.classList.add('hidden'); victoryModal.classList.add('hidden');
-            state.gameActive = true; state.gameWon = false; state.hp = 100; state.kills = 0; state.wave = 1; state.domainProgress = 0; state.domainActive = false; state.limitlessActive = false; state.surgeActive = false;
+            state.gameActive = true; state.gameWon = false; state.hp = 100; state.kills = 0; state.wave = 1; state.domainActive = false; state.limitlessActive = false; state.surgeActive = false;
             state.isCharging = false;
+            limitlessIndicator.classList.add('hidden');
             
             enemies.forEach(e => scene.remove(e.mesh)); projectiles.forEach(p => scene.remove(p.mesh)); particles.forEach(p => scene.remove(p.system));
             enemies = []; projectiles = []; particles = [];
