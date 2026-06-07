@@ -2,1394 +2,1107 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>五條悟 3D 戰鬥模擬器 - 領域展開與無下限</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- FontAwesome Font for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>咒術迴戰：澀谷事變 - 絕對碰撞與物理粉碎版</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            user-select: none;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #050505;
-            touch-action: none;
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #020205;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white; user-select: none;
         }
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
+        #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; transition: opacity 0.5s; }
+        .panel {
+            background: rgba(5, 5, 15, 0.85); border: 1px solid rgba(138, 43, 226, 0.4);
+            border-radius: 8px; padding: 15px; backdrop-filter: blur(8px);
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.2); transition: all 0.5s;
         }
-        /* 領域展開特殊黑屏特效 */
-        #domain-overlay {
-            pointer-events: none;
-            transition: all 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+        #top-left { position: absolute; top: 20px; left: 20px; display: none; }
+        
+        #gear-btn {
+            position: absolute; top: 20px; right: 20px; font-size: 28px; cursor: pointer;
+            pointer-events: auto; text-shadow: 0 0 10px #aa00ff; display: none;
+            transition: transform 0.3s ease;
         }
-        /* 自訂滾動條隱藏 */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        #gear-btn:hover { transform: rotate(90deg) scale(1.1); }
+        
+        #settings-modal {
+            position: absolute; top: 60px; right: 20px; pointer-events: auto;
+            display: flex; flex-direction: column; gap: 10px; display: none;
+            transform-origin: top right; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+
+        #bottom-center { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; display: none; }
+        
+        h1 { margin: 0 0 5px 0; font-size: 22px; color: #fff; text-shadow: 0 0 15px #00ffff; letter-spacing: 2px; }
+        p { margin: 5px 0; font-size: 14px; color: #ddd; }
+        .highlight { color: #00ffff; font-weight: bold; text-shadow: 0 0 8px #00ffff; }
+        
+        #skill-announce {
+            position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%) scale(0.5);
+            font-size: 45px; font-weight: 900; color: #fff; letter-spacing: 12px;
+            opacity: 0; pointer-events: none; z-index: 20;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap; font-style: italic;
         }
-        /* 動畫字體特效 */
-        .anime-text-shadow {
-            text-shadow: 2px 2px 0px rgba(0,0,0,0.9), 0 0 20px currentColor;
+        #skill-announce.show { transform: translateX(-50%) scale(1); opacity: 1; }
+
+        .skill-box {
+            position: relative; width: 65px; height: 65px; background: rgba(0, 0, 10, 0.6);
+            border: 2px solid #333; border-radius: 10px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; font-size: 13px; font-weight: bold;
+            transition: all 0.2s; color: #aaa; overflow: hidden; pointer-events: auto; cursor: pointer;
         }
-        @media (min-width: 768px) {
-            .anime-text-shadow {
-                text-shadow: 4px 4px 0px rgba(0,0,0,0.9), 0 0 30px currentColor;
-            }
+        .skill-box.active {
+            border-color: #00ffff; color: #fff; background: rgba(0, 50, 100, 0.8);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.9); transform: translateY(-10px) scale(1.1);
         }
-        /* 虛擬搖桿與視角區樣式 */
-        #joystick-zone, #look-zone { touch-action: none; }
+        .skill-box.on-cd { border-color: #555; color: #555; pointer-events: none; }
+        .skill-key { color: #00ffff; font-size: 14px; margin-bottom: 4px; background: rgba(0, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; z-index: 2; }
+        .skill-name { z-index: 2; text-align: center; }
+        
+        .cd-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: rgba(0, 0, 0, 0.8); z-index: 1; transition: height 0.1s linear; }
+        .cd-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: bold; color: #ff3333; z-index: 3; display: none; text-shadow: 0 0 5px #000; }
+
+        select { background: #0a0a1a; color: #00ffff; border: 1px solid #aa00ff; padding: 6px; border-radius: 4px; outline: none; cursor: pointer; font-size: 13px; }
+        
+        #domain-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; opacity: 0; transition: opacity 0.1s; pointer-events: none; z-index: 5; mix-blend-mode: overlay; }
+
+        .domain-ui-mode .panel { background: rgba(0, 5, 20, 0.2); border-color: rgba(170, 0, 255, 0.5); box-shadow: 0 0 30px rgba(170, 0, 255, 0.2); }
+        .domain-ui-mode h1 { color: #ddddff; text-shadow: 0 0 15px #aa00ff; letter-spacing: 5px; }
+        .domain-ui-mode .highlight { color: #aa00ff; text-shadow: 0 0 10px #aa00ff; }
+        .domain-ui-mode .skill-box { border-color: #50a; background: rgba(10, 0, 20, 0.8); }
+
+        #intro-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 2, 5, 0.95); z-index: 50; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: auto; backdrop-filter: blur(8px);
+        }
+        .intro-title { font-size: 48px; color: #fff; text-shadow: 0 0 20px #8a2be2, 0 0 40px #aa00ff; letter-spacing: 5px; margin-bottom: 30px; text-align: center; }
+        .intro-desc { color: #aaa; font-size: 16px; max-width: 650px; text-align: center; line-height: 1.8; margin-bottom: 40px; }
+        
+        #start-btn {
+            padding: 15px 40px; font-size: 24px; font-weight: bold; color: #fff;
+            background: #8a2be2; border: none; border-radius: 4px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.8), inset 0 0 10px rgba(255,255,255,0.4);
+            transition: all 0.2s; position: relative;
+        }
+        #start-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(138, 43, 226, 1), inset 0 0 15px rgba(255,255,255,0.6); }
+
+        .shard { position: absolute; pointer-events: none; box-shadow: 0 0 15px var(--glow-color), inset 0 0 10px rgba(255,255,255,0.8); animation: shatterAnim 0.8s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; z-index: 51; }
+
+        @keyframes shatterAnim {
+            0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; filter: brightness(2); }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.2); opacity: 0; filter: brightness(1); }
+        }
+        @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="relative text-white overflow-hidden">
+<body>
 
-    <!-- 遊戲 3D 畫布容器 -->
-    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+    <div id="game-container"></div>
+    <div id="domain-overlay"></div>
 
-    <!-- 動畫級大字招式名稱容器 -->
-    <div id="anime-skill-container" class="absolute inset-0 flex items-center justify-center pointer-events-none z-30 overflow-hidden px-4 text-center">
-        <div id="anime-skill-text" class="text-5xl md:text-8xl lg:text-[8rem] font-black italic tracking-widest opacity-0 transform scale-150 whitespace-nowrap anime-text-shadow"></div>
+    <div id="intro-screen">
+        <div class="intro-title">澀谷事變 · 無下限領域</div>
+        <div class="intro-desc">
+            五條悟的最強模擬器。<br>
+            擁有擬真物理引擎、無下限重力透鏡與全招式動態運鏡。<br>
+            前方的特級咒靈訓練假人已準備就緒，摧毀它吧。
+        </div>
+        <button id="start-btn">展開領域 (開始)</button>
     </div>
 
-    <!-- 領域展開：無量空處 視覺覆蓋特效 -->
-    <div id="domain-overlay" class="absolute inset-0 bg-black opacity-0 z-40 flex flex-col items-center justify-center pointer-events-none transition-all duration-1000 px-4 text-center">
-        <div id="domain-title" class="text-5xl md:text-8xl lg:text-[9rem] font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-100 via-indigo-200 to-white scale-50 opacity-0 transition-all duration-1000 flex flex-col items-center gap-2 md:gap-4 anime-text-shadow w-full">
-            <span class="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">領域展開</span>
-            <span class="text-3xl md:text-6xl lg:text-[6rem] text-blue-200 drop-shadow-[0_0_20px_rgba(59,130,246,0.9)]">「無量空處」</span>
-        </div>
-        <div id="domain-sub" class="text-gray-300 mt-6 md:mt-8 text-base md:text-3xl opacity-0 transition-all duration-1000 delay-300 tracking-[0.2em] md:tracking-[0.5em]">
-            無限的資訊正在湧入...
-        </div>
-    </div>
+    <div id="ui-layer">
+        <div id="skill-announce">術式順轉「蒼」</div>
 
-    <!-- 頂部資訊列：生命值、擊殺數 -->
-    <div class="absolute top-2 md:top-4 left-2 right-2 md:left-4 md:right-4 z-20 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4 pointer-events-none">
-        
-        <!-- 玩家狀態 -->
-        <div class="bg-black/80 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-xl border border-blue-500/50 flex items-center gap-2 md:gap-4 pointer-events-auto shadow-[0_0_15px_rgba(59,130,246,0.2)] w-full md:w-auto">
-            <div class="flex flex-col w-full">
-                <span class="text-[10px] md:text-xs font-bold text-blue-400 tracking-wider">最強術師 - 五條悟</span>
-                <div class="flex items-center gap-2 mt-0.5 md:mt-1">
-                    <span class="text-xs md:text-sm font-semibold">HP</span>
-                    <div class="w-full md:w-48 h-2 md:h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700 flex-grow">
-                        <div id="hp-bar" class="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-full transition-all duration-300"></div>
-                    </div>
-                    <span id="hp-text" class="text-[10px] md:text-xs font-bold w-12 text-right">100/100</span>
-                </div>
-            </div>
-            <!-- 無下限狀態標籤 -->
-            <div id="limitless-indicator" class="hidden px-1.5 py-0.5 md:px-2.5 md:py-1 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-[9px] md:text-xs font-bold rounded-lg animate-pulse whitespace-nowrap">
-                無下限開啟
-            </div>
+        <div id="top-left" class="panel">
+            <h1 id="title-text">五條 悟 - 澀谷事變</h1>
+            <p>狀態: <span id="status-text" class="highlight">無下限常駐中</span></p>
+            <p>移動: W A S D | 瞄準: 滑鼠移動</p>
+            <p>視角: <span style="color:#00ffff; font-weight:bold;">按住 右鍵 拖曳</span> | <span style="color:#00ffff; font-weight:bold;">滾輪 縮放</span></p>
         </div>
 
-        <!-- 擊殺數與分數 -->
-        <div class="bg-black/80 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-xl border border-purple-500/50 text-center pointer-events-auto flex items-center justify-around gap-2 md:gap-4 shadow-[0_0_15px_rgba(168,85,247,0.2)] w-full md:w-auto hidden sm:flex">
-            <div>
-                <span class="text-[10px] md:text-xs font-bold text-purple-400 tracking-wider block mb-0.5 md:mb-1">祓除目標</span>
-                <span class="text-lg md:text-2xl font-black text-white drop-shadow"><span id="kill-count" class="text-yellow-400">0</span> <span class="text-sm md:text-lg text-gray-400">/ 50</span></span>
-            </div>
-            <div class="border-l border-gray-700 pl-2 md:pl-4">
-                <span class="text-[10px] md:text-xs font-bold text-gray-400 tracking-wider block mb-0.5 md:mb-1">波數</span>
-                <span id="wave-count" class="text-lg md:text-2xl font-black text-blue-400">1</span>
-            </div>
-        </div>
-
-        <!-- 頂部按鈕區 -->
-        <div class="flex items-center justify-between w-full md:w-auto gap-2 md:gap-3 pointer-events-auto">
-            <!-- 視角與設定按鈕 -->
-            <div class="flex gap-1 md:gap-2 ml-auto">
-                <button id="view-toggle-btn" class="bg-zinc-900/80 border border-zinc-600 text-white w-10 h-10 md:w-12 md:px-4 md:h-12 flex items-center justify-center rounded-xl hover:bg-zinc-700 transition-colors shadow-lg active:scale-95 text-xs md:text-sm font-bold">
-                    <i class="fa-solid fa-camera"></i> <span class="hidden md:inline ml-2">視角(V)</span>
-                </button>
-                <button id="settings-btn" class="bg-zinc-900/80 border border-zinc-700 text-white w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-xl hover:bg-zinc-700 transition-colors shadow-lg active:scale-95">
-                    <i class="fa-solid fa-gear text-base md:text-xl"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- 手機版精簡擊殺數 -->
-        <div class="w-full flex justify-between px-1 pointer-events-none sm:hidden mt-[-4px]">
-            <span class="text-[10px] font-bold text-yellow-400 drop-shadow">目標: <span id="mobile-kill-count">0</span>/50</span>
-            <span class="text-[10px] font-bold text-blue-400 drop-shadow">波數: <span id="mobile-wave-count">1</span></span>
-        </div>
-    </div>
-
-    <!-- 手機模式控制區 (專屬觸控按鈕) -->
-    <div id="mobile-controls" class="hidden absolute inset-0 z-10 pointer-events-none">
-        <div id="joystick-zone" class="absolute bottom-36 md:bottom-40 left-2 md:left-4 w-28 h-28 md:w-36 md:h-36 bg-white/10 rounded-full border-2 border-white/30 pointer-events-auto flex items-center justify-center backdrop-blur-sm">
-            <div id="joystick-knob" class="w-12 h-12 md:w-14 md:h-14 bg-white/50 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.6)]"></div>
-        </div>
-        <div id="look-zone" class="absolute top-0 right-0 w-1/2 h-[70%] pointer-events-auto flex items-center justify-center">
-            <div id="look-hint" class="text-white/30 text-xs font-bold tracking-widest pointer-events-none animate-pulse">滑動轉動視角</div>
-        </div>
-        <button id="mobile-jump-btn" class="absolute bottom-[13rem] right-4 w-12 h-12 md:w-14 md:h-14 bg-white/15 rounded-full border-2 border-white/30 pointer-events-auto flex items-center justify-center backdrop-blur-sm active:bg-white/40 shadow-lg">
-            <i class="fa-solid fa-arrow-up text-lg md:text-xl text-white"></i>
-        </button>
-        <button id="mobile-attack-btn" class="absolute bottom-[8.5rem] right-12 w-16 h-16 md:w-20 md:h-20 bg-yellow-500/30 rounded-full border-2 border-yellow-400/60 pointer-events-auto flex items-center justify-center backdrop-blur-sm active:bg-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-            <i class="fa-solid fa-hand-fist text-2xl md:text-3xl text-yellow-300"></i>
-        </button>
-    </div>
-
-    <!-- 螢幕中央准星 -->
-    <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-        <div class="w-8 h-8 flex items-center justify-center opacity-70">
-            <div class="absolute w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_rgba(255,255,255,1)]"></div>
-            <div class="absolute w-4 h-[2px] bg-white/50"></div>
-            <div class="absolute h-4 w-[2px] bg-white/50"></div>
-        </div>
-    </div>
-
-    <!-- 底部 1~10 技能快捷操作欄 -->
-    <div class="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 w-full max-w-5xl px-2 md:px-4 pointer-events-none">
-        
-        <div id="domain-active-notice" class="hidden bg-indigo-900/90 backdrop-blur-md px-4 py-1.5 md:px-6 md:py-2 rounded-full border-2 border-indigo-400 text-indigo-100 text-xs md:text-base font-black tracking-widest animate-bounce shadow-[0_0_20px_rgba(99,102,241,0.6)] text-center w-max">
-            「無量空處」展開中！
-        </div>
-
-        <div class="bg-black/85 backdrop-blur-xl p-2 md:p-3.5 rounded-2xl border-2 border-zinc-700 flex flex-wrap items-center justify-center gap-1.5 md:gap-2.5 w-full pointer-events-auto shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+        <div id="gear-btn" title="遊戲設定">⚙️</div>
+        <div id="settings-modal" class="panel">
+            <label style="font-size: 12px; color:#aaa;">空間透鏡與物理破壞</label>
+            <select id="quality">
+                <option value="ultra" selected>極致 (全物理破壞 + 空間透鏡)</option>
+                <option value="high">流暢 (標準光暈 + 簡化物理)</option>
+                <option value="low">效能 (關閉物理破壞引擎)</option>
+            </select>
             
-            <!-- 1: 咒力拳頭 (可左鍵) -->
-            <button id="skill-1-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden shadow-inner group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">L/1</div>
-                    <i class="fa-solid fa-hand-fist text-yellow-500 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-1" class="absolute inset-0 bg-black/80 flex items-center justify-center text-yellow-500 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-1-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">咒力拳頭</span>
-            </button>
+            <label style="font-size: 12px; color:#aaa; margin-top:5px;">招式運鏡系統</label>
+            <select id="cinematic-toggle">
+                <option value="on" selected>開啟 (電影級視角)</option>
+                <option value="off">關閉 (固定視角)</option>
+            </select>
 
-            <!-- 2: 踢 -->
-            <button id="skill-2-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden shadow-inner group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">2</div>
-                    <i class="fa-solid fa-shoe-prints text-orange-500 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-2" class="absolute inset-0 bg-black/80 flex items-center justify-center text-orange-500 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-2-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">踢</span>
-            </button>
-
-            <!-- 3: 蒼 -->
-            <button id="skill-3-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-blue-950/80 border border-blue-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(37,99,235,0.2)] group-hover:border-blue-400">
-                    <div class="absolute top-0 left-0 bg-blue-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">3</div>
-                    <i class="fa-solid fa-vortex text-blue-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-3" class="absolute inset-0 bg-black/80 flex items-center justify-center text-blue-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-3-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-blue-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">蒼</span>
-            </button>
-
-            <!-- 4: 赫 -->
-            <button id="skill-4-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-red-950/80 border border-red-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(220,38,38,0.2)] group-hover:border-red-400">
-                    <div class="absolute top-0 left-0 bg-red-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">4</div>
-                    <i class="fa-solid fa-burst text-red-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-4" class="absolute inset-0 bg-black/80 flex items-center justify-center text-red-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-4-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-red-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">赫</span>
-            </button>
-
-            <!-- 5: 茈 -->
-            <button id="skill-5-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-purple-950/80 border border-purple-500 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.4)] group-hover:border-purple-300">
-                    <div class="absolute top-0 left-0 bg-purple-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">5</div>
-                    <i class="fa-solid fa-circle-radiation text-purple-300 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-5" class="absolute inset-0 bg-black/80 flex items-center justify-center text-purple-300 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-5-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-purple-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">茈</span>
-            </button>
-
-            <!-- 6: 無下限 (開關) -->
-            <button id="skill-6-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-cyan-950/80 border border-cyan-600 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_10px_rgba(8,145,178,0.2)] group-hover:border-cyan-400">
-                    <div class="absolute top-0 left-0 bg-cyan-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">6</div>
-                    <i class="fa-solid fa-shield-halved text-cyan-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-6" class="absolute inset-0 bg-black/80 flex items-center justify-center text-cyan-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-6-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-cyan-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">開關無下限</span>
-            </button>
-
-            <!-- 7: 瞬移 -->
-            <button id="skill-7-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">7</div>
-                    <i class="fa-solid fa-bolt text-teal-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-7" class="absolute inset-0 bg-black/80 flex items-center justify-center text-teal-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-7-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">瞬移</span>
-            </button>
-
-            <!-- 8: 反轉術式 -->
-            <button id="skill-8-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">8</div>
-                    <i class="fa-solid fa-heart-pulse text-emerald-400 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-8" class="absolute inset-0 bg-black/80 flex items-center justify-center text-emerald-400 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-8-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">反轉</span>
-            </button>
-
-            <!-- 9: 爆發 -->
-            <button id="skill-9-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-zinc-900 border border-zinc-600 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-zinc-400">
-                    <div class="absolute top-0 left-0 bg-zinc-700/80 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">9</div>
-                    <i class="fa-solid fa-fire text-pink-500 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="cooldown-9" class="absolute inset-0 bg-black/80 flex items-center justify-center text-pink-500 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-9-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-zinc-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">爆發</span>
-            </button>
-
-            <!-- 10: 領域展開 -->
-            <button id="skill-10-btn" class="flex flex-col items-center flex-shrink-0 group focus:outline-none transition-transform active:scale-90">
-                <div class="w-10 h-10 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-indigo-950/90 border-2 border-indigo-700 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(67,56,202,0.5)] animate-pulse" id="domain-btn-box">
-                    <div class="absolute top-0 left-0 bg-indigo-800 px-1 py-0 md:px-1.5 md:py-0.5 rounded-br-lg text-[8px] md:text-[10px] font-black text-white z-10">0</div>
-                    <i class="fa-solid fa-eye text-indigo-300 text-sm md:text-2xl group-hover:scale-110 transition-transform mt-0.5 md:mt-1"></i>
-                    <div id="domain-lock" class="absolute inset-0 bg-black/70 flex items-center justify-center text-gray-300 text-xs md:text-sm z-20 backdrop-blur-[2px] hidden">
-                        <i class="fa-solid fa-lock"></i>
-                    </div>
-                    <div id="cooldown-10" class="absolute inset-0 bg-black/80 flex items-center justify-center text-indigo-300 font-black text-[10px] md:text-sm opacity-0 z-20 backdrop-blur-sm"><span id="cooldown-10-txt">0s</span></div>
-                </div>
-                <span class="text-[9px] md:text-[11px] font-bold text-indigo-300 mt-1 md:mt-1.5 tracking-wider hidden sm:block">領域</span>
-            </button>
-
+            <label style="font-size: 12px; color:#aaa; margin-top:5px;">技能冷卻 (CD) 系統</label>
+            <select id="cd-toggle">
+                <option value="on" selected>開啟 (正常節奏)</option>
+                <option value="off">關閉 (無限火力！)</option>
+            </select>
         </div>
-        
-        <!-- 操作說明 (電腦版顯示) -->
-        <div class="text-[10px] md:text-[11px] text-gray-400 hidden sm:flex flex-wrap justify-center gap-x-4 gap-y-1 bg-black/50 px-4 py-1.5 rounded-full mt-1">
-            <span><strong class="text-white">視角：</strong>V 鍵</span>
-            <span><strong class="text-white">攻擊：</strong>滑鼠左鍵</span>
-            <span><strong class="text-white">移動：</strong>WASD</span>
-            <span><strong class="text-white">跳躍：</strong>空白鍵</span>
-            <span><strong class="text-white">招式：</strong>數字鍵 1~0</span>
+
+        <div id="bottom-center">
+            <div class="skill-box" id="skill-blue"><div class="cd-overlay" id="cd-over-blue"></div><div class="cd-text" id="cd-txt-blue"></div><div class="skill-key">1</div><span class="skill-name">蒼</span></div>
+            <div class="skill-box" id="skill-red"><div class="cd-overlay" id="cd-over-red"></div><div class="cd-text" id="cd-txt-red"></div><div class="skill-key">2</div><span class="skill-name">赫</span></div>
+            <div class="skill-box" id="skill-purple"><div class="cd-overlay" id="cd-over-purple"></div><div class="cd-text" id="cd-txt-purple"></div><div class="skill-key">3</div><span class="skill-name">虛式 茈</span></div>
+            <div class="skill-box" id="skill-domain"><div class="cd-overlay" id="cd-over-domain"></div><div class="cd-text" id="cd-txt-domain"></div><div class="skill-key">4</div><span class="skill-name">無量<br>空處</span></div>
+            <div class="skill-box" id="skill-teleport"><div class="cd-overlay" id="cd-over-teleport"></div><div class="cd-text" id="cd-txt-teleport"></div><div class="skill-key">5</div><span class="skill-name">瞬移</span></div>
+            <div class="skill-box" id="skill-melee"><div class="cd-overlay" id="cd-over-melee"></div><div class="cd-text" id="cd-txt-melee"></div><div class="skill-key">Z</div><span class="skill-name">體術</span></div>
         </div>
     </div>
 
-    <!-- 各種 Modal (首頁、失敗、勝利、設定) -->
-    <div id="modal-container" class="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        
-        <!-- 首頁 Modal -->
-        <div id="start-modal" class="bg-zinc-950 border border-blue-500/30 max-w-lg w-full rounded-2xl p-5 md:p-8 flex flex-col items-center text-center shadow-[0_0_40px_rgba(59,130,246,0.15)] max-h-[90vh] overflow-y-auto">
-            <h1 class="text-2xl md:text-4xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 mb-2 mt-2">五條悟：最強咒術對決</h1>
-            <p class="text-[10px] md:text-xs text-blue-400/80 tracking-widest uppercase mb-4 md:mb-6 font-bold">🎯 勝利目標：祓除 50 隻咒靈</p>
-            
-            <div class="w-full text-left bg-zinc-900/60 p-3 md:p-4 rounded-xl border border-zinc-800 mb-4 md:mb-6 text-[10px] md:text-xs text-gray-300 space-y-2 max-h-[35vh] sm:max-h-[320px] overflow-y-auto">
-                <h3 class="font-bold text-white text-xs md:text-sm border-b border-zinc-800 pb-1.5 flex items-center gap-2 sticky top-0 bg-zinc-900 py-1 z-10">
-                    <i class="fa-solid fa-circle-info text-blue-400"></i> 技能對照表 (全招式 0.5s 冷卻)：
-                </h3>
-                <p><span class="text-yellow-500 font-bold">[左鍵 / 1] 咒力拳頭</span>: 空間震盪重拳。<span class="text-orange-500 font-bold ml-2">[2] 踢</span>: 物理擊退側踢。</p>
-                <p><span class="text-blue-400 font-bold">[3] 蒼</span>: 引力黑洞。<span class="text-red-400 font-bold ml-2">[4] 赫</span>: 發射排斥衝擊波。</p>
-                <p><span class="text-purple-400 font-bold">[5] 茈</span>: 穿透性紫色極光。<span class="text-cyan-300 font-bold ml-2">[6] 無下限</span>: 開關式無敵防禦。</p>
-                <p><span class="text-teal-400 font-bold">[7] 瞬移</span>: 瞬間移動。<span class="text-emerald-400 font-bold ml-2">[8] 反轉</span>: 回復HP。</p>
-                <p><span class="text-pink-500 font-bold">[9] 爆發</span>: 提升跑速與傷害。<span class="text-indigo-400 font-bold ml-2">[0] 領域</span>: 無量空處。</p>
-                <p class="mt-2 pt-2 border-t border-zinc-800 text-yellow-300 font-bold"><i class="fa-solid fa-bolt"></i> 提示：招式無需能量，盡情釋放你的咒力吧！</p>
-            </div>
-
-            <button id="start-game-btn" class="w-full py-3 md:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-xl font-bold text-sm md:text-base hover:from-blue-500 hover:to-purple-500 transition-all active:scale-95 shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-                踏入領域，開始戰鬥
-            </button>
-        </div>
-
-        <!-- 遊戲結束 Modal -->
-        <div id="gameover-modal" class="hidden bg-zinc-950 border border-red-500/30 max-w-sm md:max-w-md w-full rounded-2xl p-6 md:p-8 flex flex-col items-center text-center shadow-[0_0_40px_rgba(239,68,68,0.15)]">
-            <div class="w-14 h-14 md:w-16 md:h-16 bg-red-950/50 border border-red-500/50 rounded-full flex items-center justify-center mb-4">
-                <i class="fa-solid fa-skull-crossbones text-red-500 text-2xl md:text-3xl"></i>
-            </div>
-            <h2 class="text-2xl md:text-3xl font-black text-red-500 tracking-wider mb-2">五條悟戰敗？</h2>
-            <p class="text-xs md:text-sm text-gray-400 mb-6">看來你大意了... 距離目標 50 斬還差一點。</p>
-            <div class="bg-zinc-900/60 p-4 rounded-xl border border-zinc-800 w-full mb-6 text-sm">
-                <div class="flex justify-between py-1">
-                    <span class="text-gray-400">祓除咒靈數量</span>
-                    <span id="end-kills" class="font-bold text-white">0</span>
-                </div>
-            </div>
-            <button id="restart-game-btn" class="w-full py-3 bg-zinc-900 border border-gray-700 rounded-xl font-bold text-white hover:bg-zinc-800 transition-all active:scale-95">
-                再次挑戰
-            </button>
-        </div>
-
-        <!-- 勝利 Modal -->
-        <div id="victory-modal" class="hidden bg-zinc-950 border border-yellow-500/50 max-w-sm md:max-w-md w-full rounded-2xl p-6 md:p-8 flex flex-col items-center text-center shadow-[0_0_50px_rgba(234,179,8,0.3)]">
-            <div class="w-16 h-16 md:w-20 md:h-20 bg-yellow-950/50 border-2 border-yellow-500/80 rounded-full flex items-center justify-center mb-4 animate-bounce">
-                <i class="fa-solid fa-crown text-yellow-400 text-3xl md:text-4xl"></i>
-            </div>
-            <h2 class="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 tracking-wider mb-2">天上天下，唯我獨尊</h2>
-            <p class="text-xs md:text-sm text-gray-300 mb-6">成功祓除了 50 隻咒靈，展現了現代最強的實力！</p>
-            <button id="victory-restart-btn" class="w-full py-3 md:py-3.5 bg-gradient-to-r from-yellow-600 to-orange-600 rounded-xl font-bold text-white hover:from-yellow-500 transition-all active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]">
-                繼續無盡挑戰
-            </button>
-        </div>
-
-        <!-- 設定 Modal -->
-        <div id="settings-modal" class="hidden bg-zinc-950 border border-zinc-500/30 max-w-sm w-full rounded-2xl p-6 md:p-8 flex flex-col items-center shadow-[0_0_40px_rgba(255,255,255,0.05)]">
-            <h2 class="text-2xl md:text-3xl font-black text-white tracking-wider mb-6">遊戲設定</h2>
-            
-            <div class="w-full bg-zinc-900/80 p-3 md:p-4 rounded-xl border border-zinc-800 mb-4 flex justify-between items-center">
-                <span class="text-xs md:text-sm text-gray-300 font-bold">動畫運鏡特效</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="toggle-cinematic" class="sr-only peer" checked>
-                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                </label>
-            </div>
-
-            <div class="w-full bg-zinc-900/80 p-3 md:p-4 rounded-xl border border-zinc-800 mb-6 md:mb-8 flex justify-between items-center">
-                <span class="text-xs md:text-sm text-gray-300 font-bold text-green-400">開啟手機模式 UI</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="toggle-mobile" class="sr-only peer">
-                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                </label>
-            </div>
-
-            <button id="close-settings-btn" class="w-full py-3 md:py-3.5 bg-blue-600 rounded-xl font-bold text-white hover:bg-blue-500 transition-all active:scale-95 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-                返回遊戲
-            </button>
-        </div>
-    </div>
-
-    <!-- 遊戲主要邏輯 -->
     <script>
-        // -----------------------------------------------------------------
-        // 1. 遊戲狀態與變數宣告
-        // -----------------------------------------------------------------
-        const state = {
-            gameActive: false,
-            gameWon: false,
-            hp: 100,
-            maxHp: 100,
-            kills: 0,
-            targetKills: 50,
-            wave: 1,
-            
-            // 領域狀態
-            domainActive: false,
-            domainTimer: 0,
-            domainDuration: 12, 
-            
-            // 無下限狀態 (Toggle 模式)
-            limitlessActive: false,
-            
-            surgeActive: false,
-            surgeTimer: 0,
-            surgeDuration: 6, 
-            
-            // 蓄力系統變數
-            isCharging: false,
-            chargeTimer: 0,
-            chargeMaxTimer: 0,
-            chargeSkill: null,
-            chargePose: null,
+        // --- 遊戲狀態與介面邏輯 ---
+        let gameStarted = false;
+        let isSettingsOpen = false;
+        let isCDEnabled = true;
 
-            // 所有技能冷卻設定為 0.5 秒
-            cooldowns: {
-                skill1: { current: 0, max: 0.5 },   
-                skill2: { current: 0, max: 0.5 },   
-                skill3: { current: 0, max: 0.5 },     
-                skill4: { current: 0, max: 0.5 },     
-                skill5: { current: 0, max: 0.5 },    
-                skill6: { current: 0, max: 0.5 },    
-                skill7: { current: 0, max: 0.5 },     
-                skill8: { current: 0, max: 0.5 },    
-                skill9: { current: 0, max: 0.5 },    
-                skill10: { current: 0, max: 0.5 }     
-            },
-            
-            keys: { w: false, a: false, s: false, d: false, space: false },
-            joystick: { x: 0, y: 0 },
-            playerVelocity: new THREE.Vector3(),
-            isJumping: false,
-            playerHeight: 1.6,
+        document.getElementById('start-btn').addEventListener('click', function(e) {
+            triggerBrittleShatter(this, () => {
+                document.getElementById('intro-screen').style.display = 'none';
+                gameStarted = true;
+                document.getElementById('top-left').style.display = 'block';
+                document.getElementById('bottom-center').style.display = 'flex';
+                document.getElementById('gear-btn').style.display = 'block';
+            });
+        });
 
-            cinematicCamera: true,
-            mobileMode: false,
-            cameraView: 1, 
-            gojoParts: null 
-        };
+        document.getElementById('gear-btn').addEventListener('click', function() {
+            isSettingsOpen = !isSettingsOpen;
+            document.getElementById('settings-modal').style.display = isSettingsOpen ? 'flex' : 'none';
+        });
 
-        let scene, camera, renderer, clock;
-        let ground, player, cameraPivot;
-        let enemies = [], particles = [], projectiles = [];
-        let domainSphere = null, domainCenterGrp = null; 
-        let limitlessVisualMesh = null, playerSurgeAura = null; 
-        let directionalLight, ambientLight, domainLight;
+        document.getElementById('cd-toggle').addEventListener('change', (e) => {
+            isCDEnabled = (e.target.value === 'on');
+            if (!isCDEnabled) Object.keys(cooldowns).forEach(key => cooldowns[key] = 0);
+        });
 
-        let chargeGroup = null; // 蓄力特效容器
-
-        let cameraShakeTimer = 0, cameraShakeIntensity = 0;
-        let targetFov = 70, currentFov = 70, cinematicRoll = 0, cinematicYawOffset = 0;
-        let isPointerLocked = false, mousePitch = 0, mouseYaw = 0;   
-
-        // -----------------------------------------------------------------
-        // 2. 頁面 UI DOM 綁定
-        // -----------------------------------------------------------------
-        const modalContainer = document.getElementById('modal-container');
-        const startModal = document.getElementById('start-modal');
-        const gameoverModal = document.getElementById('gameover-modal');
-        const victoryModal = document.getElementById('victory-modal');
-        const settingsModal = document.getElementById('settings-modal');
+        // --- 核心 3D 變數 ---
+        let scene, camera, renderer, clock = new THREE.Clock();
         
-        const startGameBtn = document.getElementById('start-game-btn');
-        const restartGameBtn = document.getElementById('restart-game-btn');
-        const victoryRestartBtn = document.getElementById('victory-restart-btn');
-        const settingsBtn = document.getElementById('settings-btn');
-        const closeSettingsBtn = document.getElementById('close-settings-btn');
-        const viewToggleBtn = document.getElementById('view-toggle-btn');
+        let playerGroup, leftArmGroup, rightArmGroup, leftLegGroup, rightLegGroup, limitlessBarrier;
+        let projectiles = [], particles = [], physicsDebris = [], shockwaves = [], barrierRipples = [], enemyProjectiles = [], cityElements = [], ground;
         
-        const toggleCinematic = document.getElementById('toggle-cinematic');
-        const toggleMobile = document.getElementById('toggle-mobile');
-        const mobileControls = document.getElementById('mobile-controls');
+        let spatialGlitches = [], afterimages = [], impactFlashes = []; 
+        let crackDecals = []; // 物理引擎：龜裂紋路容器
         
-        const joystickZone = document.getElementById('joystick-zone');
-        const joystickKnob = document.getElementById('joystick-knob');
-        const lookZone = document.getElementById('look-zone');
-        const lookHint = document.getElementById('look-hint');
-        const mobileJumpBtn = document.getElementById('mobile-jump-btn');
-        const mobileAttackBtn = document.getElementById('mobile-attack-btn');
+        let dummyGroup, dummyTorso, dummyHead;
+        let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
+        let dummyAttackTimer = 3.0; 
+        
+        let domainState = { active: false, timer: 0, phase: 'none', group: null, infoParticles: null };
+        let domainFreeze = false;
 
-        const hpBar = document.getElementById('hp-bar');
-        const hpText = document.getElementById('hp-text');
-        const killCountEl = document.getElementById('kill-count');
-        const waveCountEl = document.getElementById('wave-count');
-        const limitlessIndicator = document.getElementById('limitless-indicator');
-        const mobileKillCount = document.getElementById('mobile-kill-count');
-        const mobileWaveCount = document.getElementById('mobile-wave-count');
+        const keys = { w: false, a: false, s: false, d: false };
+        const mouse = new THREE.Vector2(); const raycaster = new THREE.Raycaster();
+        
+        let quality = 'ultra';
+        let cameraMode = 3; let cameraDistance = 25; let smoothCameraLookAt = new THREE.Vector3(); 
+        let isRightMouseDown = false; let cameraOrbitAngle = 0; let cameraPitchAngle = Math.PI / 4; 
+        
+        let isCinematicEnabled = true; let cinematic = { active: false, timer: 0, duration: 0, type: '' };
+        
+        let screenShake = 0; let timeScale = 1.0;
+        
+        // 統一招式蓄力系統
+        let skillCharge = { active: false, type: '', time: 0, maxTime: 0, blueOrb: null, redOrb: null };
+        
+        let isAttacking = false; let attackType = 0; let attackTimer = 0;
 
-        const animeSkillText = document.getElementById('anime-skill-text');
+        let shijimaDome = null, shijimaDome2 = null;
 
-        // 技能按鈕
-        const btnS1 = document.getElementById('skill-1-btn');
-        const btnS2 = document.getElementById('skill-2-btn');
-        const btnS3 = document.getElementById('skill-3-btn');
-        const btnS4 = document.getElementById('skill-4-btn');
-        const btnS5 = document.getElementById('skill-5-btn');
-        const btnS6 = document.getElementById('skill-6-btn');
-        const btnS7 = document.getElementById('skill-7-btn');
-        const btnS8 = document.getElementById('skill-8-btn');
-        const btnS9 = document.getElementById('skill-9-btn');
-        const btnS10 = document.getElementById('skill-10-btn');
-        const domainLock = document.getElementById('domain-lock');
+        const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5 };
+        const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0 };
 
-        const domainOverlay = document.getElementById('domain-overlay');
-        const domainTitle = document.getElementById('domain-title');
-        const domainSub = document.getElementById('domain-sub');
-        const domainNotice = document.getElementById('domain-active-notice');
+        init();
+        animate();
 
-        // 動畫字體
-        let animeTextTimeout;
-        function showAnimeSkillName(name, colorHex) {
-            clearTimeout(animeTextTimeout);
-            animeSkillText.style.transition = 'none';
-            animeSkillText.style.opacity = '0';
-            animeSkillText.style.transform = 'scale(1.8) rotate(-2deg)';
-            animeSkillText.style.color = colorHex;
-            animeSkillText.innerText = name;
-            void animeSkillText.offsetWidth;
-            animeSkillText.style.transition = 'all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-            animeSkillText.style.opacity = '1';
-            animeSkillText.style.transform = 'scale(1) rotate(0deg)';
-            animeTextTimeout = setTimeout(() => {
-                animeSkillText.style.transition = 'all 0.5s ease-out';
-                animeSkillText.style.opacity = '0';
-                animeSkillText.style.transform = 'scale(0.85) translateY(20px)';
-            }, 800);
-        }
+        function init() {
+            const container = document.getElementById('game-container');
 
-        // -----------------------------------------------------------------
-        // 3. 初始化 3D 引擎與五條悟
-        // -----------------------------------------------------------------
-        function initEngine() {
-            const container = document.getElementById('canvas-container');
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020205);
-            scene.fog = new THREE.FogExp2(0x020205, 0.015);
-
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-            cameraPivot = new THREE.Group();
-            cameraPivot.add(camera);
-            scene.add(cameraPivot);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0c16); scene.fog = new THREE.FogExp2(0x0a0c16, 0.012);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             container.appendChild(renderer.domElement);
 
-            clock = new THREE.Clock();
+            scene.add(new THREE.AmbientLight(0x1a1a2b, 1.0));
+            const sunLight = new THREE.DirectionalLight(0x405573, 0.7);
+            sunLight.position.set(100, 150, 50); sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048; scene.add(sunLight);
 
-            ambientLight = new THREE.AmbientLight(0x0f172a, 1.2);
-            scene.add(ambientLight);
-            directionalLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-            directionalLight.position.set(20, 40, 20);
-            directionalLight.castShadow = true;
-            scene.add(directionalLight);
+            buildCity(); createTrainingDummy(); createGojoPlayer();
 
-            createGround();
-
-            player = new THREE.Group();
-            player.position.set(0, 0, 0);
-            scene.add(player);
-
-            const gojoModel = createGojoModel();
-            player.add(gojoModel);
-            updateCameraViewPosition();
-
-            window.addEventListener('resize', onWindowResize);
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('keydown', onKeyDown);
-            document.addEventListener('keyup', onKeyUp);
-            renderer.domElement.addEventListener('click', onCanvasClick);
+            window.addEventListener('resize', onWindowResize); 
+            document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
+            window.addEventListener('mousemove', onMouseMove); window.addEventListener('wheel', onMouseWheel); 
+            window.addEventListener('mousedown', (e) => { if (e.button === 2) isRightMouseDown = true; });
+            window.addEventListener('mouseup', (e) => { if (e.button === 2) isRightMouseDown = false; });
+            window.addEventListener('contextmenu', e => e.preventDefault()); 
             
-            document.addEventListener('pointerlockchange', () => {
-                isPointerLocked = document.pointerLockElement === renderer.domElement;
-            });
+            document.getElementById('quality').addEventListener('change', (e) => { quality = e.target.value; renderer.shadowMap.enabled = (quality === 'ultra'); updateLimitlessBarrierMaterial(); });
+            document.getElementById('cinematic-toggle').addEventListener('change', (e) => { isCinematicEnabled = (e.target.value === 'on'); });
+
+            // 按鈕事件綁定
+            document.getElementById('skill-blue').onclick = () => shootProjectile('blue');
+            document.getElementById('skill-red').onclick = () => shootProjectile('red');
+            document.getElementById('skill-purple').onclick = () => shootProjectile('purple');
+            document.getElementById('skill-domain').onclick = () => activateDomain();
+            document.getElementById('skill-teleport').onclick = () => teleport();
+            document.getElementById('skill-melee').onclick = () => castMelee();
+        }
+
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+
+        function updateCooldownUI(key, currentCD, maxCD) {
+            const box = document.getElementById(`skill-${key}`); const overlay = document.getElementById(`cd-over-${key}`); const txt = document.getElementById(`cd-txt-${key}`);
+            if (currentCD > 0) { box.classList.add('on-cd'); overlay.style.height = `${(currentCD / maxCD) * 100}%`; txt.style.display = 'block'; txt.innerText = currentCD.toFixed(1); } 
+            else { box.classList.remove('on-cd'); overlay.style.height = `0%`; txt.style.display = 'none'; }
+        }
+
+        function announceSkillText(text, color) {
+            const el = document.getElementById('skill-announce');
+            el.innerText = text; el.style.color = color; el.style.textShadow = `0 0 20px ${color}, 0 0 40px ${color}`;
+            el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+            clearTimeout(el.timeoutId); el.timeoutId = setTimeout(() => el.classList.remove('show'), 1500);
+        }
+
+        function triggerBrittleShatter(element, callback) {
+            const rect = element.getBoundingClientRect(); element.style.visibility = 'hidden'; 
+            const colors = ['#8a2be2', '#00e5ff', '#ffffff', '#aa00ff'];
+            for (let i = 0; i < 35; i++) {
+                const shard = document.createElement('div'); shard.className = 'shard';
+                shard.style.clipPath = `polygon(${Math.random()*100}% ${Math.random()*100}%, ${Math.random()*100}% ${Math.random()*100}%, ${Math.random()*100}% ${Math.random()*100}%)`;
+                const size = 15 + Math.random() * 30; shard.style.width = `${size}px`; shard.style.height = `${size}px`;
+                shard.style.left = `${rect.left + Math.random() * rect.width}px`; shard.style.top = `${rect.top + Math.random() * rect.height}px`;
+                const color = colors[Math.floor(Math.random() * colors.length)]; shard.style.backgroundColor = color; shard.style.setProperty('--glow-color', color);
+                const angle = Math.random() * Math.PI * 2; const velocity = 150 + Math.random() * 300; 
+                shard.style.setProperty('--tx', `${Math.cos(angle) * velocity}px`); shard.style.setProperty('--ty', `${Math.sin(angle) * velocity}px`); shard.style.setProperty('--rot', `${(Math.random() - 0.5) * 1000}deg`);
+                document.body.appendChild(shard); setTimeout(() => shard.remove(), 800);
+            }
+            setTimeout(callback, 800);
+        }
+
+        function buildCity() {
+            ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x0e0e13, roughness: 0.7, metalness: 0.05 }));
+            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+            const crosswalkColor = new THREE.MeshStandardMaterial({ color: 0x444855, roughness: 0.8 });
+            const zebraGeo = new THREE.PlaneGeometry(1.5, 12);
+            for (let i = -6; i <= 6; i++) {
+                const zebra = new THREE.Mesh(zebraGeo, crosswalkColor); zebra.rotation.x = -Math.PI / 2; zebra.position.set(i * 3, 0.01, -10); zebra.receiveShadow = true; scene.add(zebra);
+            }
+
+            const winCanvas = document.createElement('canvas'); winCanvas.width = 512; winCanvas.height = 1024;
+            const ctx = winCanvas.getContext('2d'); ctx.fillStyle = '#050510'; ctx.fillRect(0, 0, 512, 1024);
+            for(let y=10; y<1000; y+=25) {
+                for(let x=10; x<500; x+=25) { if(Math.random() > 0.45) { ctx.fillStyle = Math.random() > 0.8 ? '#e2d3af' : (Math.random() > 0.5 ? '#114a5d' : '#300f3a'); ctx.fillRect(x, y, 12, 18); } }
+            }
+            const winTex = new THREE.CanvasTexture(winCanvas); winTex.wrapS = THREE.RepeatWrapping; winTex.wrapT = THREE.RepeatWrapping;
+
+            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            const buildingColors = [0x151624, 0x111119, 0x0c0c14];
             
-            initMobileControls();
-        }
+            for (let i = 0; i < 280; i++) {
+                const w = 8 + Math.random() * 15; const h = 30 + Math.random() * 80; const d = 8 + Math.random() * 15;
+                const neonColor = new THREE.Color().setHSL(0.75 + Math.random()*0.1, 0.8, 0.4); 
+                
+                let posX, posZ; 
+                do { posX = (Math.random() - 0.5) * 290; posZ = (Math.random() - 0.5) * 290; } while (Math.sqrt(posX*posX + posZ*posZ) < 35); 
 
-        function createGojoModel() {
-            const group = new THREE.Group();
-            const clothMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.4 });
-            const hairMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
-            const blindMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1.0 });
+                const buildingMat = new THREE.MeshStandardMaterial({ color: buildingColors[Math.floor(Math.random()*buildingColors.length)], roughness: 0.6, metalness: 0.4, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.7 });
+                const building = new THREE.Mesh(boxGeo, buildingMat);
+                building.scale.set(w, h, d); building.position.set(posX, h / 2, posZ); 
+                building.castShadow = true; building.receiveShadow = true; 
+                
+                building.userData = { 
+                    isSolid: true, halfW: w/2, halfD: d/2,
+                    initialScaleY: h, currentScaleY: h, initialPosY: h / 2, currentPosY: h / 2,
+                    isCollapsing: false, shakeTimer: 0, glitchIntensity: Math.random() * 0.4 + 0.3
+                };
+                
+                scene.add(building); cityElements.push(building);
 
-            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.7, 16), clothMat);
-            torso.position.y = 1.05; torso.castShadow = true; group.add(torso);
-
-            const headGroup = new THREE.Group();
-            headGroup.position.y = 1.55; group.add(headGroup);
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), skinMat);
-            head.castShadow = true; headGroup.add(head);
-            const blindfold = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.1, 16), blindMat);
-            blindfold.position.y = 0.02; headGroup.add(blindfold);
-
-            for(let i=0; i<15; i++) {
-                const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 8), hairMat);
-                spike.position.y = 0.15;
-                spike.rotation.x = (Math.random() - 0.5) * 1.5; spike.rotation.z = (Math.random() - 0.5) * 1.5;
-                headGroup.add(spike);
-            }
-
-            const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), clothMat);
-            leftArm.position.set(-0.35, 1.1, 0); leftArm.castShadow = true; group.add(leftArm);
-            const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), clothMat);
-            rightArm.position.set(0.35, 1.1, 0); rightArm.castShadow = true; group.add(rightArm);
-            const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.7, 8), clothMat);
-            leftLeg.position.set(-0.15, 0.35, 0); leftLeg.castShadow = true; group.add(leftLeg);
-            const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.7, 8), clothMat);
-            rightLeg.position.set(0.15, 0.35, 0); rightLeg.castShadow = true; group.add(rightLeg);
-
-            state.gojoParts = { headGroup, leftArm, rightArm, leftLeg, rightLeg };
-            return group;
-        }
-
-        function toggleCameraView() {
-            state.cameraView = state.cameraView >= 3 ? 1 : state.cameraView + 1;
-            updateCameraViewPosition();
-            showAnimeSkillName(`視角 ${state.cameraView}`, '#ffffff');
-        }
-
-        function updateCameraViewPosition() {
-            if (!state.gojoParts) return;
-            mousePitch = 0; 
-            if (state.cameraView === 1) {
-                camera.position.set(0, 0, 0);
-                state.gojoParts.headGroup.visible = false;
-            } else if (state.cameraView === 2) {
-                camera.position.set(0.8, 0.2, 3.5);
-                state.gojoParts.headGroup.visible = true;
-            } else if (state.cameraView === 3) {
-                camera.position.set(0, 2.5, 7);
-                state.gojoParts.headGroup.visible = true;
-            }
-            if (state.cameraView !== 1) camera.lookAt(0, 0.5, -5);
-            else camera.rotation.set(0,0,0); 
-        }
-
-        // --- 手機模式 ---
-        function initMobileControls() {
-            let isDragging = false;
-            let joystickCenter = { x: 0, y: 0 };
-            const maxRadius = 40;
-
-            joystickZone.addEventListener('touchstart', (e) => {
-                if (!state.mobileMode || !state.gameActive) return;
-                isDragging = true;
-                const rect = joystickZone.getBoundingClientRect();
-                joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-                updateJoystick(e.touches[0]);
-            });
-
-            joystickZone.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                e.preventDefault();
-                updateJoystick(e.touches[0]);
-            });
-
-            const stopJoystick = () => {
-                isDragging = false;
-                state.joystick.x = 0; state.joystick.y = 0;
-                joystickKnob.style.transform = `translate(0px, 0px)`;
-            };
-            joystickZone.addEventListener('touchend', stopJoystick);
-            joystickZone.addEventListener('touchcancel', stopJoystick);
-
-            function updateJoystick(touch) {
-                let dx = touch.clientX - joystickCenter.x; let dy = touch.clientY - joystickCenter.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance > maxRadius) { dx = (dx / distance) * maxRadius; dy = (dy / distance) * maxRadius; }
-                joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-                state.joystick.x = dx / maxRadius; state.joystick.y = dy / maxRadius;
-            }
-
-            let lastLook = { x: 0, y: 0 };
-            lookZone.addEventListener('touchstart', (e) => {
-                if (!state.mobileMode || !state.gameActive) return;
-                lastLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                if (lookHint) lookHint.classList.add('hidden');
-            });
-
-            lookZone.addEventListener('touchmove', (e) => {
-                if (!state.mobileMode || !state.gameActive) return;
-                e.preventDefault();
-                const currentLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                mouseYaw -= (currentLook.x - lastLook.x) * 0.006;
-                mousePitch -= (currentLook.y - lastLook.y) * 0.006;
-                mousePitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, mousePitch));
-                lastLook = currentLook;
-            });
-
-            mobileJumpBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (state.gameActive && !state.isJumping) { state.keys.space = true; setTimeout(() => state.keys.space = false, 100); }
-            }, {passive: false});
-
-            mobileAttackBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (state.gameActive) triggerPunch();
-            }, {passive: false});
-        }
-        
-        function applySettings() {
-            state.cinematicCamera = toggleCinematic.checked;
-            state.mobileMode = toggleMobile.checked;
-            if (state.mobileMode) {
-                mobileControls.classList.remove('hidden'); document.exitPointerLock();
-                if (lookHint) lookHint.classList.remove('hidden');
-            } else {
-                mobileControls.classList.add('hidden');
-                if (state.gameActive) renderer.domElement.requestPointerLock();
-            }
-        }
-
-        function createGround() {
-            const size = 200; const segments = 100;
-            const gridHelper = new THREE.GridHelper(size, segments, 0x3b82f6, 0x111827);
-            gridHelper.position.y = 0.01; scene.add(gridHelper);
-            const floorGeo = new THREE.PlaneGeometry(size, size);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x05070c, roughness: 0.9, metalness: 0.1 });
-            ground = new THREE.Mesh(floorGeo, floorMat);
-            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
-            scene.add(ground);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function onMouseMove(e) {
-            if (!state.gameActive || state.mobileMode) return;
-            if (!isPointerLocked) return; 
-            mouseYaw -= e.movementX * 0.002; mousePitch -= e.movementY * 0.002;
-            mousePitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, mousePitch));
-        }
-
-        function onKeyDown(e) {
-            if (!state.gameActive) return;
-            const key = e.key.toLowerCase();
-            if (key === 'w' || key === 'arrowup') state.keys.w = true;
-            if (key === 's' || key === 'arrowdown') state.keys.s = true;
-            if (key === 'a' || key === 'arrowleft') state.keys.a = true;
-            if (key === 'd' || key === 'arrowright') state.keys.d = true;
-            if (e.code === 'Space') state.keys.space = true;
-            if (key === 'v') toggleCameraView();
-
-            if (e.key === '1') triggerPunch();
-            if (e.key === '2') triggerKick();
-            if (e.key === '3') triggerSkillBlue();
-            if (e.key === '4') triggerSkillRed();
-            if (e.key === '5') triggerSkillPurple();
-            if (e.key === '6') triggerLimitless();
-            if (e.key === '7') triggerTeleport();
-            if (e.key === '8') triggerHeal();
-            if (e.key === '9') triggerSurge();
-            if (e.key === '0') triggerSkillDomain();
-        }
-
-        function onKeyUp(e) {
-            const key = e.key.toLowerCase();
-            if (key === 'w' || key === 'arrowup') state.keys.w = false;
-            if (key === 's' || key === 'arrowdown') state.keys.s = false;
-            if (key === 'a' || key === 'arrowleft') state.keys.a = false;
-            if (key === 'd' || key === 'arrowright') state.keys.d = false;
-            if (e.code === 'Space') state.keys.space = false;
-        }
-
-        function onCanvasClick(e) {
-            if (!state.gameActive || state.mobileMode) return; 
-            if (e.button === 0) triggerPunch();
-        }
-
-        // -----------------------------------------------------------------
-        // 4. 蓄力系統 (Charge System)
-        // -----------------------------------------------------------------
-        function startCharge(skillId, duration, name, color, pose) {
-            if (state.isCharging) return;
-            state.isCharging = true;
-            state.chargeTimer = duration;
-            state.chargeMaxTimer = duration;
-            state.chargeSkill = skillId;
-            state.chargePose = pose;
-
-            if(name) showAnimeSkillName(name, color);
-            
-            if(duration > 0.1) { // 時間太短的(如普攻)就不顯示太誇張的聚氣圈
-                chargeGroup = new THREE.Group();
-                player.add(chargeGroup);
-                const auraMat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.6 });
-                const aura = new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 12), auraMat);
-                chargeGroup.add(aura);
-
-                const pGeo = new THREE.BufferGeometry();
-                const pPos = [];
-                for(let i=0; i<60; i++) pPos.push((Math.random()-0.5)*8, (Math.random()-0.5)*8 + 1.0, (Math.random()-0.5)*8);
-                pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-                const pSys = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: color, size: 0.15, transparent: true, blending: THREE.AdditiveBlending }));
-                chargeGroup.add(pSys);
-
-                chargeGroup.userData = { aura: aura, pSys: pSys, pPos: pPos };
-            }
-        }
-
-        function applyChargePose() {
-            if (!state.gojoParts) return;
-            const p = state.gojoParts;
-            switch(state.chargePose) {
-                case 'punch': p.rightArm.rotation.x = -1.5; p.rightArm.rotation.z = 0.5; break;
-                case 'kick': p.rightLeg.rotation.x = -1.0; break;
-                case 'blue': p.rightArm.rotation.x = -1.5; break;
-                case 'red': p.rightArm.rotation.x = -1.5; p.rightArm.rotation.z = -0.5; break;
-                case 'purple': p.leftArm.rotation.x = -1.5; p.rightArm.rotation.x = -1.5; p.leftArm.position.x = -0.15; p.rightArm.position.x = 0.15; break;
-                case 'domain': p.leftArm.rotation.x = -1.5; p.leftArm.rotation.z = 1.0; p.rightArm.rotation.x = -1.5; p.rightArm.rotation.z = -1.0; break;
-                case 'heal': p.leftArm.rotation.x = -2.5; p.rightArm.rotation.x = -2.5; break;
-                case 'surge': p.leftArm.rotation.z = 0.8; p.rightArm.rotation.z = -0.8; break;
-            }
-        }
-
-        function resetPose() {
-            if (!state.gojoParts) return;
-            const p = state.gojoParts;
-            p.leftArm.rotation.set(0,0,0); p.rightArm.rotation.set(0,0,0);
-            p.leftLeg.rotation.set(0,0,0); p.rightLeg.rotation.set(0,0,0);
-            p.leftArm.position.set(-0.35, 1.1, 0); p.rightArm.position.set(0.35, 1.1, 0);
-        }
-
-        function updateCharge(delta) {
-            if (state.isCharging) {
-                state.chargeTimer -= delta;
-
-                if (chargeGroup) {
-                    chargeGroup.userData.aura.rotation.y += delta * 6;
-                    chargeGroup.userData.aura.scale.setScalar(0.5 + (state.chargeTimer / state.chargeMaxTimer) * 1.5);
-                    const arr = chargeGroup.userData.pSys.geometry.attributes.position.array;
-                    for(let i=0; i<60; i++) {
-                        arr[i*3] -= arr[i*3] * delta * 5;
-                        arr[i*3+1] -= (arr[i*3+1] - 1.0) * delta * 5;
-                        arr[i*3+2] -= arr[i*3+2] * delta * 5;
-                    }
-                    chargeGroup.userData.pSys.geometry.attributes.position.needsUpdate = true;
+                if (Math.random() > 0.25) {
+                    const line = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: neonColor, transparent: true, opacity: 0.35 }));
+                    line.scale.set(w + 0.15, h + 0.15, d + 0.15); line.position.copy(building.position); 
+                    scene.add(line); cityElements.push(line); building.userData.outlineLine = line; 
                 }
 
-                applyChargePose();
-
-                if (state.chargeTimer <= 0) {
-                    state.isCharging = false;
-                    if(chargeGroup) { player.remove(chargeGroup); chargeGroup = null; }
-                    resetPose();
-                    
-                    if(state.chargeSkill === 1) executePunch();
-                    else if(state.chargeSkill === 2) executeKick();
-                    else if(state.chargeSkill === 3) executeSkillBlue();
-                    else if(state.chargeSkill === 4) executeSkillRed();
-                    else if(state.chargeSkill === 5) executeSkillPurple();
-                    else if(state.chargeSkill === 6) executeLimitless();
-                    else if(state.chargeSkill === 7) executeTeleport();
-                    else if(state.chargeSkill === 8) executeHeal();
-                    else if(state.chargeSkill === 9) executeSurge();
-                    else if(state.chargeSkill === 10) executeDomain();
+                if (Math.random() > 0.65) {
+                    const slime = new THREE.Mesh(new THREE.SphereGeometry(2 + Math.random()*3, 8, 8), new THREE.MeshBasicMaterial({ color: 0x24054a, transparent: true, opacity: 0.7, wireframe: true }));
+                    slime.position.set(posX + (Math.random()-0.5)*w*0.8, Math.random()*h*0.8, posZ + (Math.random()-0.5)*d*0.8);
+                    scene.add(slime); cityElements.push(slime); building.userData.slime = slime;
                 }
             }
+
+            const wallGeo = new THREE.PlaneGeometry(300, 150); const wallMat = new THREE.MeshBasicMaterial({ color: 0x5a0fa3, transparent: true, opacity: 0.12, wireframe: true, side: THREE.DoubleSide });
+            const wallN = new THREE.Mesh(wallGeo, wallMat); wallN.position.set(0, 75, -150); scene.add(wallN); cityElements.push(wallN);
+            const wallS = new THREE.Mesh(wallGeo, wallMat); wallS.position.set(0, 75, 150); wallS.rotation.y = Math.PI; scene.add(wallS); cityElements.push(wallS);
+            const wallE = new THREE.Mesh(wallGeo, wallMat); wallE.position.set(150, 75, 0); wallE.rotation.y = -Math.PI/2; scene.add(wallE); cityElements.push(wallE);
+            const wallW = new THREE.Mesh(wallGeo, wallMat); wallW.position.set(-150, 75, 0); wallW.rotation.y = Math.PI/2; scene.add(wallW); cityElements.push(wallW);
+
+            const domeGeo = new THREE.SphereGeometry(350, 16, 16, 0, Math.PI*2, 0, Math.PI/2);
+            shijimaDome = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0x0b041c, transparent: true, opacity: 0.45, wireframe: true, side: THREE.BackSide })); shijimaDome.position.set(0, -10, 0); scene.add(shijimaDome);
+            shijimaDome2 = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0x1d0130, transparent: true, opacity: 0.2, side: THREE.BackSide })); shijimaDome2.position.set(0, -10, 0); shijimaDome2.scale.setScalar(0.98); scene.add(shijimaDome2);
         }
 
-        // -----------------------------------------------------------------
-        // 5. 1~10 招式觸發與實作
-        // -----------------------------------------------------------------
-        function triggerPunch() {
-            if (state.cooldowns.skill1.current > 0 || state.isCharging) return;
-            state.cooldowns.skill1.current = state.cooldowns.skill1.max;
-            startCharge(1, 0.1, '咒力拳頭', '#facc15', 'punch');
-        }
-        function executePunch() {
-            const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos); 
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            const strikePoint = new THREE.Vector3().copy(spawnPos).addScaledVector(dir, 2.5);
-
-            const punchMesh = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.8, wireframe: true }));
-            punchMesh.position.copy(strikePoint); scene.add(punchMesh);
-            const shock = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 4, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.6 }));
-            shock.position.copy(strikePoint); scene.add(shock);
-
-            projectiles.push({ mesh: punchMesh, shock: shock, type: 'melee_punch', life: 0.15, radius: 1.5, damage: state.surgeActive ? 40 : 25 });
-            createExplosion(strikePoint, 0xfacc15, 8, 0.4);
-            checkMeleeCollision(strikePoint, 2.2, state.surgeActive ? 40 : 25, 2.5); 
+        function toggleCityVisibility(visible) {
+            cityElements.forEach(el => {
+                el.visible = visible;
+                if (el.userData && el.userData.outlineLine) el.userData.outlineLine.visible = visible;
+                if (el.userData && el.userData.slime) el.userData.slime.visible = visible;
+            });
+            if(shijimaDome) shijimaDome.material.opacity = visible ? 0.45 : 0.8;
+            if(shijimaDome2) shijimaDome2.material.opacity = visible ? 0.2 : 0.6;
         }
 
-        function triggerKick() {
-            if (state.cooldowns.skill2.current > 0 || state.isCharging) return;
-            state.cooldowns.skill2.current = state.cooldowns.skill2.max;
-            startCharge(2, 0.35, '迴旋踢', '#f97316', 'kick');
-        }
-        function executeKick() {
-            if (state.cinematicCamera) { cinematicRoll = 0.15; setTimeout(() => cinematicRoll = 0, 300); }
-            const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos);
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            const kickCenter = new THREE.Vector3().copy(spawnPos).addScaledVector(dir, 3.2);
+        function createTrainingDummy() {
+            dummyGroup = new THREE.Group(); dummyGroup.position.copy(dummyPhysics.position);
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.9 }); const ropeMat = new THREE.MeshStandardMaterial({ color: 0xbf9b63, roughness: 1.0 });
 
-            const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.15, 8, 16), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.7 }));
-            ring.position.copy(kickCenter); ring.rotation.x = Math.PI / 2; scene.add(ring);
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x222222 })); base.position.y = 0.1; dummyGroup.add(base);
+            dummyTorso = new THREE.Group(); dummyTorso.position.y = 0.2; dummyGroup.add(dummyTorso);
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 2.5, 8), woodMat); pillar.position.y = 1.25; dummyTorso.add(pillar);
+            const strawWrap = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 8), ropeMat); strawWrap.position.y = 1.6; dummyTorso.add(strawWrap);
 
-            projectiles.push({ mesh: ring, type: 'melee_kick', life: 0.25, radius: 2.5, damage: state.surgeActive ? 55 : 35 });
-            createExplosion(kickCenter, 0xf97316, 12, 0.8);
-            checkMeleeCollision(kickCenter, 3.5, state.surgeActive ? 55 : 35, 12.0); 
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.0, 8);
+            const armLeft = new THREE.Mesh(armGeo, woodMat); armLeft.rotation.z = Math.PI/2.5; armLeft.position.set(-0.4, 1.7, 0); dummyTorso.add(armLeft);
+            const armRight = new THREE.Mesh(armGeo, woodMat); armRight.rotation.z = -Math.PI/2.5; armRight.position.set(0.4, 1.7, 0); dummyTorso.add(armRight);
+
+            dummyHead = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), ropeMat); dummyHead.position.y = 2.4; dummyTorso.add(dummyHead);
+            scene.add(dummyGroup);
         }
 
-        function triggerSkillBlue() {
-            if (state.cooldowns.skill3.current > 0 || state.isCharging) return;
-            state.cooldowns.skill3.current = state.cooldowns.skill3.max;
-            startCharge(3, 0.4, '術式順轉「蒼」', '#3b82f6', 'blue');
-        }
-        function executeSkillBlue() {
-            if (state.cinematicCamera) { targetFov = 95; setTimeout(() => targetFov = 70, 400); }
-            const raycaster = new THREE.Raycaster();
-            const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos);
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            raycaster.set(spawnPos, dir);
+        // --- 物理破壞系統：龜裂 (0.3s) -> 碎裂爆發 (0.2s) -> 減速落地 (0.5s) ---
+        function spawnCrackAndShatter(pos, colorHex, size, isVertical) {
+            if (quality === 'low') return;
 
-            const intersects = raycaster.intersectObject(ground);
-            let targetPoint = new THREE.Vector3();
-            if (intersects.length > 0 && intersects[0].distance < 45) targetPoint.copy(intersects[0].point);
-            else { targetPoint.copy(spawnPos).addScaledVector(dir, 16); targetPoint.y = 1.0; }
-
-            const blueCore = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.9 }));
-            blueCore.position.copy(targetPoint); scene.add(blueCore);
-
-            const ring = new THREE.Mesh(new THREE.RingGeometry(1.8, 2.2, 32), new THREE.MeshBasicMaterial({ color: 0x3b82f6, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
-            ring.rotation.x = Math.PI / 2; blueCore.add(ring);
-            blueCore.add(new THREE.PointLight(0x2563eb, 8, 30));
-
-            projectiles.push({ mesh: blueCore, type: 'blue', life: 3.5, radius: 10.0, damage: 0.8, point: targetPoint, pulseTimer: 0 });
-            createExplosion(targetPoint, 0x1d4ed8, 30, 2.0);
-        }
-
-        function triggerSkillRed() {
-            if (state.cooldowns.skill4.current > 0 || state.isCharging) return;
-            state.cooldowns.skill4.current = state.cooldowns.skill4.max;
-            startCharge(4, 0.4, '術式反轉「赫」', '#ef4444', 'red');
-        }
-        function executeSkillRed() {
-            if (state.cinematicCamera) { targetFov = 50; setTimeout(() => targetFov = 70, 300); }
-            const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos);
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            spawnPos.addScaledVector(dir, 1.5);
-
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 16), new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.95 }));
-            mesh.position.copy(spawnPos); scene.add(mesh);
-
-            mesh.add(new THREE.PointLight(0xf43f5e, 6, 15));
-            const shockwave = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.2, 8, 32), new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.8 }));
-            shockwave.rotation.x = Math.PI / 2; mesh.add(shockwave);
-
-            projectiles.push({ mesh: mesh, shockwave: shockwave, dir: dir, speed: 35, damage: 60, life: 2.0, type: 'red', radius: 2.5 });
-            createExplosion(spawnPos, 0xef4444, 25, 1.5);
-            cameraShakeTimer = 0.3; cameraShakeIntensity = 0.15;
-        }
-
-        function triggerSkillPurple() {
-            if (state.cooldowns.skill5.current > 0 || state.isCharging) return;
-            state.cooldowns.skill5.current = state.cooldowns.skill5.max;
-            startCharge(5, 0.6, '虛式「茈」', '#a855f7', 'purple');
-        }
-        function executeSkillPurple() {
-            if (state.cinematicCamera) { targetFov = 130; cinematicRoll = -0.15; setTimeout(() => { targetFov = 70; cinematicRoll = 0; }, 600); }
-            const spawnPos = new THREE.Vector3(); cameraPivot.getWorldPosition(spawnPos);
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            spawnPos.addScaledVector(dir, 2.0);
-
-            const purpleGroup = new THREE.Group(); purpleGroup.position.copy(spawnPos);
-            const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(2.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.95 }));
-            purpleGroup.add(coreMesh);
-            const outerMesh = new THREE.Mesh(new THREE.SphereGeometry(3.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.4, wireframe: true }));
-            purpleGroup.add(outerMesh);
-            purpleGroup.add(new THREE.PointLight(0xd8b4fe, 15, 45));
-            scene.add(purpleGroup);
-
-            projectiles.push({ mesh: purpleGroup, coreMesh: coreMesh, outerMesh: outerMesh, dir: dir, speed: 28, damage: 180, life: 4.0, type: 'purple', radius: 5.0 });
-            createExplosion(spawnPos, 0xa855f7, 60, 4.0);
-            cameraShakeTimer = 0.7; cameraShakeIntensity = 0.3;
-        }
-
-        // 開關式無下限防禦
-        function triggerLimitless() {
-            if (state.cooldowns.skill6.current > 0 || state.isCharging) return;
-            state.cooldowns.skill6.current = state.cooldowns.skill6.max;
+            const crackGroup = new THREE.Group();
+            crackGroup.position.copy(pos);
             
-            if (state.limitlessActive) {
-                // 關閉無下限
-                state.limitlessActive = false;
-                limitlessIndicator.classList.add('hidden');
-                if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; }
-                showAnimeSkillName('無下限解除', '#9ca3af');
-            } else {
-                // 開啟無下限
-                startCharge(6, 0.2, '無下限咒術', '#22d3ee', 'domain');
-            }
-        }
-        function executeLimitless() {
-            state.limitlessActive = true;
-            limitlessIndicator.classList.remove('hidden');
-            limitlessVisualMesh = new THREE.Mesh(new THREE.SphereGeometry(2.0, 32, 32), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.35, wireframe: true }));
-            player.add(limitlessVisualMesh);
-            createExplosion(player.position, 0x22d3ee, 30, 2.0);
-        }
+            if (isVertical) { crackGroup.rotation.y = Math.random() * Math.PI; } 
+            else { crackGroup.position.y = 0.05; crackGroup.rotation.x = -Math.PI / 2; crackGroup.rotation.z = Math.random() * Math.PI; }
 
-        function triggerTeleport() {
-            if (state.cooldowns.skill7.current > 0 || state.isCharging) return;
-            state.cooldowns.skill7.current = state.cooldowns.skill7.max;
-            startCharge(7, 0.1, '瞬移', '#2dd4bf', 'blue');
-        }
-        function executeTeleport() {
-            const dir = new THREE.Vector3(); cameraPivot.getWorldDirection(dir);
-            dir.y = 0; dir.normalize();
-            const startPos = new THREE.Vector3().copy(player.position);
-            player.position.addScaledVector(dir, 14.0);
-            player.position.x = Math.max(-95, Math.min(95, player.position.x));
-            player.position.z = Math.max(-95, Math.min(95, player.position.z));
-            createExplosion(startPos, 0x3b82f6, 15, 1.0); createExplosion(player.position, 0x22d3ee, 15, 1.0);
-        }
-
-        function triggerHeal() {
-            if (state.cooldowns.skill8.current > 0 || state.hp >= state.maxHp || state.isCharging) return;
-            state.cooldowns.skill8.current = state.cooldowns.skill8.max;
-            startCharge(8, 0.4, '反轉術式', '#34d399', 'heal');
-        }
-        function executeHeal() {
-            state.hp = Math.min(state.maxHp, state.hp + 40);
-            createExplosion(player.position, 0x34d399, 25, 1.5);
-        }
-
-        function triggerSurge() {
-            if (state.cooldowns.skill9.current > 0 || state.isCharging) return;
-            state.cooldowns.skill9.current = state.cooldowns.skill9.max;
-            startCharge(9, 0.5, '咒力爆發', '#ec4899', 'surge');
-        }
-        function executeSurge() {
-            state.surgeActive = true; state.surgeTimer = state.surgeDuration;
-            playerSurgeAura = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.1, 8, 16), new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0.6 }));
-            playerSurgeAura.rotation.x = Math.PI / 2; playerSurgeAura.position.y = 0.2;
-            player.add(playerSurgeAura);
-            createExplosion(player.position, 0xec4899, 30, 2.5);
-        }
-
-        function triggerSkillDomain() {
-            if (state.domainActive || state.isCharging || state.cooldowns.skill10.current > 0) return;
-            state.cooldowns.skill10.current = state.cooldowns.skill10.max;
-            startCharge(10, 1.0, '領域展開', '#ffffff', 'domain');
-        }
-        function executeDomain() {
-            state.domainActive = true; state.domainTimer = state.domainDuration;
-            if (state.cinematicCamera) { cinematicYawOffset = Math.PI * 2; targetFov = 110; setTimeout(() => targetFov = 70, 1500); }
-
-            domainOverlay.classList.remove('pointer-events-none'); domainOverlay.classList.add('opacity-95');
-            domainTitle.classList.remove('scale-50', 'opacity-0'); domainTitle.classList.add('scale-100', 'opacity-100');
-            domainSub.classList.remove('opacity-0'); domainSub.classList.add('opacity-100');
-
-            setTimeout(() => {
-                domainOverlay.classList.add('pointer-events-none'); domainOverlay.classList.remove('opacity-95');
-                domainTitle.classList.add('scale-50', 'opacity-0'); domainTitle.classList.remove('scale-100', 'opacity-100');
-                domainSub.classList.add('opacity-0'); domainSub.classList.remove('opacity-100');
-                domainNotice.classList.remove('hidden');
-            }, 2500);
-
-            domainSphere = new THREE.Mesh(new THREE.SphereGeometry(85, 32, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }));
-            domainSphere.position.copy(player.position); scene.add(domainSphere);
-
-            domainCenterGrp = new THREE.Group();
-            const ring1 = new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 16, 100), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 }));
-            ring1.rotation.x = Math.PI / 2; domainCenterGrp.add(ring1);
-            const ring2 = new THREE.Mesh(new THREE.TorusGeometry(20, 0.8, 16, 100), new THREE.MeshBasicMaterial({ color: 0xa855f7, transparent: true, opacity: 0.8 }));
-            ring2.rotation.x = Math.PI / 2.5; domainCenterGrp.add(ring2);
-            domainSphere.add(domainCenterGrp);
-
-            const starGeo = new THREE.BufferGeometry();
-            const starCount = 600; const starPositions = new Float32Array(starCount * 3), starColors = new Float32Array(starCount * 3);
-            const color1 = new THREE.Color(0x60a5fa), color2 = new THREE.Color(0xc084fc), color3 = new THREE.Color(0xffffff);
-
-            for(let i=0; i<starCount; i++) {
-                const radius = 25 + Math.random() * 55; const theta = Math.random() * Math.PI * 2; const phi = Math.acos((Math.random() * 2) - 1);
-                starPositions[i*3] = radius * Math.sin(phi) * Math.cos(theta); starPositions[i*3+1] = radius * Math.sin(phi) * Math.sin(theta); starPositions[i*3+2] = radius * Math.cos(phi);
-                let mxC = Math.random() > 0.6 ? color1 : (Math.random() > 0.3 ? color2 : color3);
-                starColors[i*3] = mxC.r; starColors[i*3+1] = mxC.g; starColors[i*3+2] = mxC.b;
-            }
-            starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3)); starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-            domainInnerParticles = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 0.6, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
-            domainSphere.add(domainInnerParticles);
-
-            domainLight = new THREE.DirectionalLight(0xa855f7, 3.0); domainLight.position.set(0, 50, 0); scene.add(domainLight);
-            directionalLight.visible = false; scene.fog.color.setHex(0x000000);
-
-            enemies.forEach(enemy => { enemy.isFrozen = true; enemy.mesh.children[0].material.color.setHex(0x4338ca); });
-            createExplosion(player.position, 0x818cf8, 100, 10.0);
-            cameraShakeTimer = 1.2; cameraShakeIntensity = 0.35;
-        }
-
-        function endDomain() {
-            state.domainActive = false; domainNotice.classList.add('hidden');
-            if (domainSphere) { scene.remove(domainSphere); domainSphere = null; domainCenterGrp = null; }
-            if (domainLight) { scene.remove(domainLight); domainLight = null; }
-            directionalLight.visible = true; scene.fog.color.setHex(0x020205);
-            enemies.forEach(enemy => { enemy.isFrozen = false; enemy.mesh.children[0].material.color.setHex(enemy.originalColor); });
-        }
-
-        // -----------------------------------------------------------------
-        // 物理與遊戲邏輯
-        // -----------------------------------------------------------------
-        function checkMeleeCollision(center, radius, damage, knockbackForce) {
-            for (let j = enemies.length - 1; j >= 0; j--) {
-                const enemy = enemies[j]; const dist = center.distanceTo(enemy.mesh.position);
-                if (dist < (radius + 1.0 * enemy.scale)) {
-                    damageEnemy(enemy, damage, j);
-                    const pushDir = new THREE.Vector3().subVectors(enemy.mesh.position, player.position).normalize(); pushDir.y = 0.2; 
-                    enemy.mesh.position.addScaledVector(pushDir, knockbackForce);
-                    createExplosion(enemy.mesh.position, 0xfacc15, 12, 0.8);
+            const material = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 1.0 });
+            const points = [];
+            const numCracks = 5 + Math.floor(Math.random() * 5);
+            for(let i=0; i<numCracks; i++) {
+                let angle = (i / numCracks) * Math.PI * 2 + (Math.random() - 0.5);
+                let r = size * (0.8 + Math.random() * 0.8);
+                points.push(new THREE.Vector3(0,0,0));
+                let segments = 3; let curX = 0, curY = 0;
+                for(let j=1; j<=segments; j++) {
+                    curX += Math.cos(angle + (Math.random()-0.5)*1.0) * (r/segments);
+                    curY += Math.sin(angle + (Math.random()-0.5)*1.0) * (r/segments);
+                    points.push(new THREE.Vector3(curX, curY, 0));
+                    if(j < segments) points.push(new THREE.Vector3(curX, curY, 0));
                 }
             }
+            crackGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), material));
+            scene.add(crackGroup);
+            crackDecals.push({ mesh: crackGroup, life: 0.3, colorHex: colorHex, size: size, pos: pos.clone() });
         }
 
-        function createExplosion(pos, colorHex, count = 20, size = 1.0) {
-            const geo = new THREE.BufferGeometry(); const positions = [], velocities = [];
+        function spawnPhysicsDebris(pos, colorHex, count = 15) {
+            if (quality === 'low') return;
+            if (quality === 'high') count = Math.max(3, Math.floor(count / 3));
+            
+            const debrisGeo = new THREE.DodecahedronGeometry(0.2 + Math.random()*0.3); 
+            const debrisMat = new THREE.MeshPhysicalMaterial({ color: colorHex, roughness: 0.1, metalness: 0.8, emissive: colorHex, emissiveIntensity: 2.0 });
             for (let i = 0; i < count; i++) {
-                positions.push(pos.x, pos.y, pos.z);
-                const angle = Math.random() * Math.PI * 2; const speed = (0.5 + Math.random() * 2) * size * 4;
-                velocities.push(Math.cos(angle) * speed * (Math.random() - 0.5), (Math.random() - 0.1) * speed, Math.sin(angle) * speed * (Math.random() - 0.5));
+                const mesh = new THREE.Mesh(debrisGeo, debrisMat);
+                mesh.position.copy(pos); mesh.position.add(new THREE.Vector3((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5));
+                scene.add(mesh);
+                
+                // 初速度極高，隨後受空氣阻力減速
+                let burstSpeed = 40 + Math.random() * 25;
+                physicsDebris.push({ 
+                    mesh: mesh, 
+                    velocity: new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed), 
+                    gravity: -80.0, // 高重力讓其在 0.5s 內落地
+                    life: 0.7, initialLife: 0.7 
+                });
             }
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            const pSystem = new THREE.Points(geo, new THREE.PointsMaterial({ color: colorHex, size: 0.22 * size, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false }));
-            scene.add(pSystem);
-            particles.push({ system: pSystem, velocities: velocities, life: 0.8, maxLife: 0.8, initialSize: 0.22 * size });
         }
 
-        function spawnEnemy() {
-            const angle = Math.random() * Math.PI * 2; const distance = 35 + Math.random() * 15;
-            const x = player.position.x + Math.cos(angle) * distance; const z = player.position.z + Math.sin(angle) * distance;
+        function createGojoPlayer() {
+            if (playerGroup) scene.remove(playerGroup);
+            playerGroup = new THREE.Group(); playerGroup.position.set(0, 1.8, 0); 
+            const uniformMat = new THREE.MeshStandardMaterial({ color: 0x0c0c16, roughness: 0.8 }); const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe2d2, roughness: 0.4 });
             
-            const enemyGroup = new THREE.Group(); enemyGroup.position.set(x, 1.4, z);
-            const randType = Math.random();
-            let type = 'normal', color = 0xef4444, hp = 30 + state.wave * 8, speed = 4.2 + Math.random() * 2.5, scale = 1.0, damage = 12;
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.6, 8), uniformMat); torso.position.y = 0.8; playerGroup.add(torso);
+            const headGroup = new THREE.Group(); headGroup.position.y = 1.8; headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), skinMat));
+            headGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.15, 16), new THREE.MeshStandardMaterial({color: 0x050505})).translateY(0.05));
+            headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 16, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color: 0xffffff})).translateY(0.1));
+            playerGroup.add(headGroup);
 
-            if (randType > 0.88) { type = 'boss'; color = 0xf59e0b; hp = 110 + state.wave * 35; speed = 3.0; scale = 2.0; damage = 25; }
-            else if (randType > 0.65) { type = 'fast'; color = 0x10b981; hp = 20 + state.wave * 4; speed = 7.5; scale = 0.8; damage = 6; }
+            leftArmGroup = new THREE.Group(); leftArmGroup.position.set(-0.6, 1.4, 0); leftArmGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.9, 8), uniformMat).translateY(-0.45)); playerGroup.add(leftArmGroup);
+            rightArmGroup = new THREE.Group(); rightArmGroup.position.set(0.6, 1.4, 0); rightArmGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.9, 8), uniformMat).translateY(-0.45)); playerGroup.add(rightArmGroup);
+            leftLegGroup = new THREE.Group(); leftLegGroup.position.set(-0.25, 0.8, 0); leftLegGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 1.0, 8), uniformMat).translateY(-0.5)); playerGroup.add(leftLegGroup);
+            rightLegGroup = new THREE.Group(); rightLegGroup.position.set(0.25, 0.8, 0); rightLegGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 1.0, 8), uniformMat).translateY(-0.5)); playerGroup.add(rightLegGroup);
 
-            const body = new THREE.Mesh(new THREE.OctahedronGeometry(1.0 * scale, 1), new THREE.MeshStandardMaterial({ color: color, roughness: 0.9, metalness: 0.1 }));
-            body.castShadow = true; body.receiveShadow = true; enemyGroup.add(body);
-
-            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.3 * scale, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-            eye.position.set(0, 0, 0.8 * scale); body.add(eye);
-            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.12 * scale, 8, 8), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-            pupil.position.set(0, 0, 1.0 * scale); body.add(pupil);
-
-            const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2 * scale, 0.08 * scale, 8, 20), new THREE.MeshBasicMaterial({ color: color, wireframe: true }));
-            ring.rotation.x = Math.PI / 2; enemyGroup.add(ring);
-
-            scene.add(enemyGroup);
-            enemies.push({ mesh: enemyGroup, body: body, type: type, hp: hp, maxHp: hp, speed: speed, damage: damage, originalColor: color, isFrozen: state.domainActive, scale: scale, hitFlashTimer: 0, bobTimer: Math.random() * 100 });
-            createExplosion(enemyGroup.position, color, 12, 1.0);
+            limitlessBarrier = new THREE.Mesh(new THREE.SphereGeometry(1.6, 32, 32), getLimitlessMaterial()); limitlessBarrier.position.y = 0.8; playerGroup.add(limitlessBarrier);
+            scene.add(playerGroup); smoothCameraLookAt.copy(playerGroup.position);
         }
 
-        let waveTimer = 0;
-        function updateWaves(delta) {
-            if (state.gameWon) return;
-            waveTimer += delta;
-            if (enemies.length === 0 || waveTimer > 20) {
-                waveTimer = 0;
-                if (enemies.length === 0) state.wave++;
-                for (let i = 0; i < 4 + state.wave * 2; i++) spawnEnemy();
-            }
+        function getLimitlessMaterial() {
+            if (quality === 'ultra') return new THREE.MeshPhysicalMaterial({ transmission: 1.0, ior: 1.15, thickness: 2.0, roughness: 0.0, color: 0xffffff, transparent: true, opacity: 1.0, side: THREE.BackSide });
+            else return new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending });
+        }
+        function updateLimitlessBarrierMaterial() { if(limitlessBarrier) { limitlessBarrier.material.dispose(); limitlessBarrier.material = getLimitlessMaterial(); } }
+
+        function spawnBarrierRipple(impactPos) {
+            const ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.2, 32), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+            ring.position.copy(impactPos); ring.lookAt(playerGroup.position.x, playerGroup.position.y + 0.8, playerGroup.position.z);
+            scene.add(ring); barrierRipples.push({ mesh: ring, scale: 1, life: 1.0 });
         }
 
-        function gameLoop() {
-            requestAnimationFrame(gameLoop);
-            if (!state.gameActive) return;
-
-            const delta = clock.getDelta();
-            
-            if (state.cinematicCamera) {
-                currentFov += (targetFov - currentFov) * 10 * delta;
-                camera.fov = currentFov; camera.updateProjectionMatrix();
-                camera.rotation.z += (cinematicRoll - camera.rotation.z) * 10 * delta;
-                if (cinematicYawOffset > 0) { cinematicYawOffset -= delta * 5; if (cinematicYawOffset < 0) cinematicYawOffset = 0; }
-            } else {
-                camera.fov = 70; camera.rotation.z = 0; cinematicYawOffset = 0; camera.updateProjectionMatrix();
-            }
-
-            // 更新蓄力
-            updateCharge(delta);
-            updateCooldownsAndBuffs(delta); 
-            updatePlayer(delta); 
-            updateProjectiles(delta); 
-            updateEnemies(delta); 
-            updateParticles(delta);
-
-            if (state.limitlessActive && limitlessVisualMesh) {
-                limitlessVisualMesh.rotation.y += delta * 2; limitlessVisualMesh.rotation.z -= delta * 1;
-                limitlessVisualMesh.material.opacity = 0.35 + Math.sin(clock.elapsedTime * 8) * 0.15; limitlessVisualMesh.scale.setScalar(1.0 + Math.sin(clock.elapsedTime * 15) * 0.03);
-            }
-
-            if (state.surgeActive && playerSurgeAura) playerSurgeAura.rotation.z += delta * 4;
-
-            if (domainSphere) {
-                domainSphere.rotation.y += delta * 0.05; domainInnerParticles.rotation.x += delta * 0.02;
-                if(domainCenterGrp) { domainCenterGrp.children[0].rotation.z += delta * 0.5; domainCenterGrp.children[1].rotation.y -= delta * 0.8; }
-            }
-
-            updateWaves(delta); updateUI(); renderer.render(scene, camera);
+        function dummyShootAttack() {
+            if (domainState.active) return; 
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
+            let startPos = new THREE.Vector3().copy(dummyGroup.position); startPos.y += 1.5; mesh.position.copy(startPos);
+            let targetPos = new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z);
+            scene.add(mesh); enemyProjectiles.push({ mesh: mesh, dir: new THREE.Vector3().subVectors(targetPos, startPos).normalize(), speed: 15.0, life: 5.0 });
         }
 
-        function updateCooldownsAndBuffs(delta) {
-            for (let key in state.cooldowns) {
-                if (state.cooldowns[key].current > 0) { state.cooldowns[key].current -= delta; if (state.cooldowns[key].current < 0) state.cooldowns[key].current = 0; }
-            }
-            if (state.domainActive) { state.domainTimer -= delta; if (state.domainTimer <= 0) endDomain(); }
-            if (state.surgeActive) { state.surgeTimer -= delta; if (state.surgeTimer <= 0) { state.surgeActive = false; if (playerSurgeAura) { player.remove(playerSurgeAura); playerSurgeAura = null; } } }
+        function triggerCinematic(type, duration) {
+            if (!isCinematicEnabled) return; cinematic.active = true; cinematic.timer = duration; cinematic.duration = duration; cinematic.type = type;
         }
 
-        function updatePlayer(delta) {
-            const baseSpeed = state.surgeActive ? 24.0 : 16.0; const damping = 10.0; const gravity = 32.0; const jumpHeight = 12.0;
-            state.playerVelocity.x -= state.playerVelocity.x * damping * delta; state.playerVelocity.z -= state.playerVelocity.z * damping * delta;
-
-            if (player.position.y > 0) state.playerVelocity.y -= gravity * delta; else { state.playerVelocity.y = 0; player.position.y = 0; state.isJumping = false; }
-
-            const activeYaw = mouseYaw + cinematicYawOffset;
-            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeYaw).normalize();
-            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeYaw).normalize();
-
-            let moveDir = new THREE.Vector3();
-            let inputX = state.joystick.x, inputY = state.joystick.y;
-            if (state.keys.w) inputY = -1; if (state.keys.s) inputY = 1; if (state.keys.a) inputX = -1; if (state.keys.d) inputX = 1;
-
-            if (inputY !== 0) moveDir.addScaledVector(forward, -inputY); if (inputX !== 0) moveDir.addScaledVector(right, inputX);
-            const isMoving = moveDir.lengthSq() > 0;
-            
-            // 蓄力時大幅降低跑速
-            const speedMod = state.isCharging ? 0.2 : 1.0;
-
-            if (isMoving) {
-                moveDir.normalize(); const speedMult = Math.min(1, Math.sqrt(inputX*inputX + inputY*inputY) || 1);
-                state.playerVelocity.x += moveDir.x * baseSpeed * 8 * delta * speedMult * speedMod; state.playerVelocity.z += moveDir.z * baseSpeed * 8 * delta * speedMult * speedMod;
-            }
-
-            if (state.keys.space && !state.isJumping && !state.isCharging) { state.playerVelocity.y = jumpHeight; state.isJumping = true; }
-
-            player.position.addScaledVector(state.playerVelocity, delta);
-            player.position.x = Math.max(-95, Math.min(95, player.position.x)); player.position.z = Math.max(-95, Math.min(95, player.position.z));
-            cameraPivot.position.copy(player.position); cameraPivot.position.y += state.playerHeight;
-            cameraPivot.rotation.x = mousePitch; cameraPivot.rotation.y = mouseYaw + cinematicYawOffset; player.rotation.y = mouseYaw;
-
-            if (!state.isCharging) {
-                if (state.gojoParts && isMoving && !state.isJumping) {
-                    const speed = 15;
-                    state.gojoParts.leftArm.rotation.x = Math.sin(clock.elapsedTime * speed) * 0.5; state.gojoParts.rightArm.rotation.x = -Math.sin(clock.elapsedTime * speed) * 0.5;
-                    state.gojoParts.leftLeg.rotation.x = -Math.sin(clock.elapsedTime * speed) * 0.6; state.gojoParts.rightLeg.rotation.x = Math.sin(clock.elapsedTime * speed) * 0.6;
-                } else if (state.gojoParts) {
-                    state.gojoParts.leftArm.rotation.x = 0; state.gojoParts.rightArm.rotation.x = 0; state.gojoParts.leftLeg.rotation.x = 0; state.gojoParts.rightLeg.rotation.x = 0;
-                }
-            }
-
-            if (cameraShakeTimer > 0) {
-                cameraShakeTimer -= delta;
-                cameraPivot.position.x += (Math.random() - 0.5) * cameraShakeIntensity; cameraPivot.position.y += (Math.random() - 0.5) * cameraShakeIntensity; cameraPivot.position.z += (Math.random() - 0.5) * cameraShakeIntensity;
-            }
+        function triggerFlashCut() {
+            const overlay = document.getElementById('domain-overlay');
+            overlay.style.transition = 'opacity 0.05s'; overlay.style.background = '#ffffff'; overlay.style.opacity = '0.3'; 
+            setTimeout(() => { overlay.style.transition = 'opacity 0.1s'; overlay.style.opacity = '0'; }, 50);
         }
 
-        function updateProjectiles(delta) {
-            for (let i = projectiles.length - 1; i >= 0; i--) {
-                const p = projectiles[i]; p.life -= delta;
-                if (p.life <= 0) { scene.remove(p.mesh); if(p.shock) scene.remove(p.shock); projectiles.splice(i, 1); continue; }
+        function createSpatialGlitch(pos) {
+            const points = []; for (let i = 0; i < 5; i++) points.push(new THREE.Vector3((Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 2 + 1, (Math.random() - 0.5) * 1.5));
+            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1.0 }));
+            line.position.copy(pos); scene.add(line); spatialGlitches.push({ mesh: line, life: 0.15 }); 
+        }
 
-                if (p.type === 'melee_kick') { p.mesh.scale.addScalar(delta * 2.5); continue; }
-                if (p.type === 'melee_punch') { p.mesh.scale.addScalar(delta * 4.0); if(p.shock) { p.shock.scale.addScalar(delta * 6.0); p.shock.material.opacity = p.life * 4; } continue; }
+        function createAfterimage(pos, rotY) {
+            const ghostGroup = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({ color: 0x0044ff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.6, 8), mat); torso.position.y = 0.8; ghostGroup.add(torso);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), mat); head.position.y = 1.8; ghostGroup.add(head);
+            ghostGroup.position.copy(pos); ghostGroup.rotation.y = rotY; scene.add(ghostGroup); afterimages.push({ group: ghostGroup, life: 0.2 }); 
+        }
 
-                if (p.type === 'red' || p.type === 'purple') {
-                    p.mesh.position.addScaledVector(p.dir, p.speed * delta);
-                    if (p.type === 'red' && p.shockwave) p.shockwave.scale.addScalar(delta * 2.0); 
-                    if (p.type === 'purple') { p.coreMesh.rotation.y += delta * 4; p.outerMesh.rotation.x -= delta * 2; p.outerMesh.rotation.z += delta * 3; createExplosion(p.mesh.position, 0xa855f7, 3, 0.7); cameraShakeTimer = 0.1; cameraShakeIntensity = 0.08; }
+        function createImpactFlash(pos, colorHex) {
+            const group = new THREE.Group(); group.position.copy(pos);
+            const light = new THREE.PointLight(colorHex, 8, 15);
+            const core = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true}));
+            const halo = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 16), new THREE.MeshBasicMaterial({color: colorHex, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending}));
+            group.add(light); group.add(core); group.add(halo); scene.add(group);
+            impactFlashes.push({ group: group, light: light, meshes: [core, halo], life: 0.15 });
+        }
 
-                    for (let j = enemies.length - 1; j >= 0; j--) {
-                        const enemy = enemies[j]; const dist = p.mesh.position.distanceTo(enemy.mesh.position);
-                        if (dist < (p.radius + 1.2 * enemy.scale)) {
-                            damageEnemy(enemy, p.damage, j);
-                            if (p.type === 'red') { const pushDir = new THREE.Vector3().subVectors(enemy.mesh.position, p.mesh.position).normalize(); pushDir.y = 0.2; enemy.mesh.position.addScaledVector(pushDir, 20); createExplosion(enemy.mesh.position, 0xef4444, 15, 1.2); }
-                            if (p.type !== 'purple') { createExplosion(p.mesh.position, 0xef4444, 12, 0.8); scene.remove(p.mesh); projectiles.splice(i, 1); break; } else createExplosion(enemy.mesh.position, 0xa855f7, 8, 1.5);
-                        }
-                    }
-                } 
-                else if (p.type === 'blue') {
-                    p.pulseTimer += delta; p.mesh.rotation.z += delta * 3;
-                    for (let j = enemies.length - 1; j >= 0; j--) {
-                        const enemy = enemies[j]; const dist = p.point.distanceTo(enemy.mesh.position);
-                        if (dist < p.radius) {
-                            const pullForce = (1.0 - (dist / p.radius)) * 25.0 * delta; 
-                            if (dist > 1.2) enemy.mesh.position.addScaledVector(new THREE.Vector3().subVectors(p.point, enemy.mesh.position).normalize(), pullForce);
-                            damageEnemy(enemy, p.damage, j);
-                            if (Math.random() < 0.35) createExplosion(enemy.mesh.position, 0x3b82f6, 4, 0.7);
-                        }
+        // --- 碰撞檢測與物理觸發 ---
+        function checkBuildingHits(impactPos, radius, dir, skillType) {
+            for (let i = 0; i < cityElements.length; i++) {
+                const el = cityElements[i];
+                if (el.userData && el.userData.isSolid && el.visible && !el.userData.isCollapsing) {
+                    const dist = el.position.distanceTo(new THREE.Vector3(impactPos.x, el.position.y, impactPos.z));
+                    if (dist < radius + Math.max(el.userData.halfW, el.userData.halfD) * 1.2) {
+                        el.userData.isCollapsing = true; el.userData.shakeTimer = 0.8; 
+                        let debrisColor = 0x13131c; 
+                        if (skillType === 'blue') debrisColor = 0x0055ff; if (skillType === 'red') debrisColor = 0xff0044; if (skillType === 'purple') debrisColor = 0x7700ff;
+
+                        spawnCrackAndShatter(impactPos, debrisColor, skillType === 'purple' ? 10 : 4, true);
+                        createImpactFlash(impactPos, debrisColor);
+                        let collapseFactor = (skillType === 'purple') ? 0.1 : 0.6; 
+                        el.userData.targetScaleY = el.userData.initialScaleY * collapseFactor; el.userData.targetPosY = el.userData.initialPosY * collapseFactor;
+                        screenShake = Math.max(screenShake, skillType === 'purple' ? 4.0 : 1.8);
                     }
                 }
             }
         }
 
-        function updateEnemies(delta) {
-            const playerCollisionRadius = 1.6;
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const enemy = enemies[i];
-                if (enemy.hitFlashTimer > 0) { enemy.hitFlashTimer -= delta; if (enemy.hitFlashTimer <= 0) enemy.mesh.children[0].material.color.setHex(enemy.isFrozen ? 0x4338ca : enemy.originalColor); }
-                if (enemy.isFrozen) { enemy.mesh.position.x += (Math.random() - 0.5) * 0.02; enemy.mesh.position.z += (Math.random() - 0.5) * 0.02; continue; }
-                enemy.bobTimer += delta * 3.2; enemy.mesh.position.y = 1.1 + Math.sin(enemy.bobTimer) * 0.25 * enemy.scale;
-                enemy.body.rotation.y += delta * 0.8; enemy.body.rotation.x += delta * 0.4;
-                const dir = new THREE.Vector3().subVectors(player.position, enemy.mesh.position); dir.y = 0; const dist = dir.length(); dir.normalize();
-                enemy.mesh.position.addScaledVector(dir, enemy.speed * delta);
-                if (dist < playerCollisionRadius + 0.8 * enemy.scale) {
-                    damagePlayer(enemy.damage); enemy.mesh.position.addScaledVector(dir, -4.5); createExplosion(player.position, 0xef4444, 10, 0.8);
-                }
-            }
-        }
-
-        function updateParticles(delta) {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i]; p.life -= delta;
-                if (p.life <= 0) { scene.remove(p.system); particles.splice(i, 1); continue; }
-                const posAttr = p.system.geometry.attributes.position; const arr = posAttr.array;
-                for (let j = 0; j < posAttr.count; j++) { arr[j * 3] += p.velocities[j * 3] * delta; arr[j * 3 + 1] += p.velocities[j * 3 + 1] * delta; arr[j * 3 + 2] += p.velocities[j * 3 + 2] * delta; p.velocities[j * 3 + 1] -= 2.0 * delta; }
-                posAttr.needsUpdate = true;
-                const progress = p.life / p.maxLife; p.system.material.opacity = progress; p.system.material.size = p.initialSize * (0.1 + 0.9 * Math.pow(progress, 0.5));
-            }
-        }
-
-        function damageEnemy(enemy, dmg, index) {
-            enemy.hp -= dmg; enemy.mesh.children[0].material.color.setHex(0xffffff); enemy.hitFlashTimer = 0.12;
-            if (enemy.hp <= 0) {
-                createExplosion(enemy.mesh.position, enemy.originalColor, 35, 1.8 * enemy.scale); scene.remove(enemy.mesh); enemies.splice(index, 1);
-                state.kills++;
-                if (state.kills >= state.targetKills && !state.gameWon) triggerVictory();
-            }
-        }
-
-        function damagePlayer(dmg) {
-            if (state.domainActive || state.limitlessActive || state.gameWon) return; 
-            state.hp = Math.max(0, state.hp - dmg); cameraShakeTimer = 0.3; cameraShakeIntensity = 0.25;
-            if (state.hp <= 0) endGame();
-        }
-
-        function updateSkillButtonCD(skillKey, overlayEl, textEl) {
-            const cd = state.cooldowns[skillKey];
-            if (!cd || !overlayEl || !textEl) return;
-            if (cd.current > 0 || state.isCharging) {
-                overlayEl.classList.remove('opacity-0');
-                overlayEl.classList.add('opacity-100');
-                textEl.innerText = state.isCharging ? '...' : `${cd.current.toFixed(1)}s`;
-            } else {
-                overlayEl.classList.remove('opacity-100');
-                overlayEl.classList.add('opacity-0');
-            }
-        }
-
-        function updateUI() {
-            hpBar.style.width = `${(state.hp / state.maxHp) * 100}%`; hpText.innerText = `${Math.ceil(state.hp)}/100`;
-            killCountEl.innerText = state.kills; waveCountEl.innerText = state.wave;
-            mobileKillCount.innerText = state.kills; mobileWaveCount.innerText = state.wave;
-
-            for(let i=1; i<=10; i++) updateSkillButtonCD(`skill${i}`, document.getElementById(`cooldown-${i}`), document.getElementById(`cooldown-${i}-txt`));
-        }
-
-        function startGame() {
-            modalContainer.classList.add('hidden'); startModal.classList.add('hidden'); gameoverModal.classList.add('hidden'); victoryModal.classList.add('hidden');
-            state.gameActive = true; state.gameWon = false; state.hp = 100; state.kills = 0; state.wave = 1; state.domainActive = false; state.limitlessActive = false; state.surgeActive = false;
-            state.isCharging = false;
-            limitlessIndicator.classList.add('hidden');
+        function castMelee() {
+            if (!gameStarted || (isCDEnabled && cooldowns.melee > 0) || attackTimer > 0 || skillCharge.active) return;
+            if (isCDEnabled) cooldowns.melee = cdMax.melee;
             
-            enemies.forEach(e => scene.remove(e.mesh)); projectiles.forEach(p => scene.remove(p.mesh)); particles.forEach(p => scene.remove(p.system));
-            enemies = []; projectiles = []; particles = [];
-            if (domainSphere) { scene.remove(domainSphere); domainSphere = null; domainCenterGrp = null; }
-            if (limitlessVisualMesh) { player.remove(limitlessVisualMesh); limitlessVisualMesh = null; }
-            if (playerSurgeAura) { player.remove(playerSurgeAura); playerSurgeAura = null; }
-            if (chargeGroup) { player.remove(chargeGroup); chargeGroup = null; resetPose(); }
-
-            player.position.set(0, 0, 0); updateCameraViewPosition(); mouseYaw = 0; mousePitch = 0;
-            for (let key in state.cooldowns) state.cooldowns[key].current = 0;
-            if (!state.mobileMode) renderer.domElement.requestPointerLock();
-            for (let i = 0; i < 4; i++) spawnEnemy(); clock.getDelta(); 
+            isAttacking = true; attackType = Math.floor(Math.random() * 3); attackTimer = 0.35; 
+            announceSkillText(attackType === 2 ? "破甲踢擊" : "無下限打擊", "#00ffff"); triggerCinematic('melee', 0.4);
+            
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground);
+            if(intersects.length > 0) {
+                const startPos = playerGroup.position.clone();
+                const target = intersects[0].point; const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize();
+                
+                const endPos = startPos.clone().add(dir.clone().multiplyScalar(2.0));
+                endPos.x = THREE.MathUtils.clamp(endPos.x, -145, 145); endPos.z = THREE.MathUtils.clamp(endPos.z, -145, 145);
+                
+                createAfterimage(startPos, playerGroup.rotation.y); createAfterimage(startPos.clone().lerp(endPos, 0.5), playerGroup.rotation.y);
+                playerGroup.position.copy(endPos);
+                const hitPos = new THREE.Vector3(playerGroup.position.x + dir.x * 1.0, 1.5, playerGroup.position.z + dir.z * 1.0);
+                
+                createSpatialGlitch(hitPos); createParticles(hitPos, 0x00ffff, 15, 8); 
+                
+                if (playerGroup.position.distanceTo(dummyPhysics.position) < 3.5) {
+                    dummyPhysics.velX = dir.z * 25; dummyPhysics.velZ = -dir.x * 25; screenShake = 1.5; 
+                    spawnCrackAndShatter(hitPos, 0x8a5a36, 1.5, false); // 假人碎屑
+                    createImpactFlash(hitPos, 0x00aaff); createShockwave(hitPos, 0xddffff, 10); 
+                }
+                checkBuildingHits(hitPos, 2.5, dir, 'melee');
+            }
         }
 
-        function endGame() { state.gameActive = false; document.exitPointerLock(); modalContainer.classList.remove('hidden'); gameoverModal.classList.remove('hidden'); document.getElementById('end-kills').innerText = state.kills; }
+        // --- 統整招式蓄力系統 ---
+        function shootProjectile(type) {
+            if (!gameStarted || skillCharge.active) return;
+            if (isCDEnabled) { if ((type === 'blue' && cooldowns.blue > 0) || (type === 'red' && cooldowns.red > 0) || (type === 'purple' && cooldowns.purple > 0)) return; }
+
+            if (type === 'purple') {
+                if (isCDEnabled) cooldowns.purple = cdMax.purple;
+                announceSkillText("術式融合", "#aa00ff"); triggerCinematic('purple', 1.5); isAttacking = true; attackType = 3; attackTimer = 1.5;
+
+                const blueOrb = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
+                const redOrb = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
+                createGravitationalRings(blueOrb, 1.2, 0x00ffff); blueOrb.position.set(-2.5, 2.0, 0.5); redOrb.position.set(2.5, 2.0, 0.5);
+                
+                if (quality === 'ultra') { blueOrb.add(new THREE.PointLight(0x00aaff, 4, 15)); redOrb.add(new THREE.PointLight(0xff0055, 4, 15)); }
+                playerGroup.add(blueOrb); playerGroup.add(redOrb); 
+                
+                skillCharge = { active: true, time: 0, maxTime: 1.2, type: 'purple', blueOrb: blueOrb, redOrb: redOrb };
+                toggleCityVisibility(false); 
+                return; 
+            }
+
+            if (type === 'blue') {
+                if (isCDEnabled) cooldowns.blue = cdMax.blue;
+                announceSkillText("術式順轉「蒼」", "#00aaff"); triggerCinematic('blue', 1.0); isAttacking = true; attackType = 5; attackTimer = 0.6;
+                skillCharge = { active: true, time: 0, maxTime: 0.3, type: 'blue' };
+                toggleCityVisibility(false);
+                return;
+            }
+
+            if (type === 'red') {
+                if (isCDEnabled) cooldowns.red = cdMax.red;
+                announceSkillText("術式反轉「赫」", "#ff0033"); triggerCinematic('red', 1.0); isAttacking = true; attackType = 4; attackTimer = 0.5; screenShake = 1.5;
+                skillCharge = { active: true, time: 0, maxTime: 0.3, type: 'red' };
+                toggleCityVisibility(false);
+                return;
+            }
+        }
+
+        // --- 釋放實體光球 ---
+        function spawnActualProjectile(type) {
+            if (!playerGroup) return; 
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground); 
+            let target = intersects.length > 0 ? intersects[0].point : new THREE.Vector3(0, 0, -100).applyMatrix4(camera.matrixWorld);
+            const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize();
+
+            const projGroup = new THREE.Group(); projGroup.position.copy(playerGroup.position); projGroup.position.y += 1.0; 
+            let color, size, speed, intensity, life;
+
+            if (type === 'blue') {
+                color = 0x0044ff; size = 2.0; speed = 35; intensity = 5; life = 2.5; createGravitationalRings(projGroup, size, 0x00ffff);
+            } else if (type === 'red') {
+                createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5;
+                color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; 
+            } else if (type === 'purple_fire') {
+                color = 0x8800ff; size = 6.0; speed = 35; intensity = 10; life = 4.0; type = 'purple'; 
+                announceSkillText("虛式「茈」", "#aa00ff"); triggerCinematic('purple_fire', 1.5);
+                timeScale = 0.1; screenShake = 3.5;
+            }
+
+            projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(size, 32, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending })));
+            const coreColor = (type === 'purple') ? 0x02000a : (type === 'blue' ? 0x00ffff : 0xffffff);
+            projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(type === 'purple' ? size*0.6 : size*0.4, 16, 16), new THREE.MeshBasicMaterial({color: coreColor})));
+
+            if (quality === 'ultra') projGroup.add(new THREE.PointLight(color, intensity, size * 25));
+            scene.add(projGroup); projectiles.push({ mesh: projGroup, dir: dir, speed: speed, type: type, life: life, size: size, color: color });
+        }
+
+        function createGravitationalRings(parentGroup, size, colorHex) {
+            const ringGeo = new THREE.TorusGeometry(size * 1.5, 0.08, 8, 32); const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+            const ring1 = new THREE.Mesh(ringGeo, ringMat); const ring2 = new THREE.Mesh(ringGeo, ringMat);
+            ring1.rotation.x = Math.PI / 2; ring2.rotation.y = Math.PI / 2; parentGroup.add(ring1); parentGroup.add(ring2);
+        }
+
+        function createShockwave(pos, colorHex, maxScale) {
+            const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.5, 32), new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 1.0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+            ring.rotation.x = -Math.PI / 2; ring.position.copy(pos); ring.position.y += 0.2; scene.add(ring); shockwaves.push({ mesh: ring, scale: 1, maxScale: maxScale, life: 1.0 });
+        }
+
+        function createImplosionParticles(targetPos, radius, colorHex, count) {
+            const pGeo = new THREE.BufferGeometry(); const positions = []; const velocities = [];
+            for (let i = 0; i < count; i++) {
+                const offset = new THREE.Vector3((Math.random() - 0.5) * radius, (Math.random() - 0.5) * radius, (Math.random() - 0.5) * radius);
+                const startPos = new THREE.Vector3().addVectors(targetPos, offset); positions.push(startPos.x, startPos.y, startPos.z);
+                const vel = new THREE.Vector3().subVectors(targetPos, startPos).multiplyScalar(2.5); velocities.push(vel.x, vel.y, vel.z);
+            }
+            pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.2, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false}));
+            scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 0.4 }); 
+        }
+
+        function createParticles(pos, colorHex, count, spreadSpeed = 15) {
+            const pGeo = new THREE.BufferGeometry(); const positions = []; const velocities = [];
+            for (let i = 0; i < count; i++) {
+                positions.push(pos.x, pos.y, pos.z); velocities.push((Math.random() - 0.5) * spreadSpeed, (Math.random() - 0.5) * spreadSpeed, (Math.random() - 0.5) * spreadSpeed);
+            }
+            pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.5, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false}));
+            scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 1.0 });
+        }
+
+        function updateStatus(text) { document.getElementById('status-text').innerText = text; }
+        function highlightUI(id) { const el = document.getElementById(id); if(el) { el.classList.add('active'); setTimeout(() => el.classList.remove('active'), 250); } }
+
+        function onKeyDown(event) {
+            if (!gameStarted) return; const k = event.key.toLowerCase(); if (keys.hasOwnProperty(k)) keys[k] = true;
+
+            if (k === '1') { highlightUI('skill-blue'); shootProjectile('blue'); }
+            if (k === '2') { highlightUI('skill-red'); shootProjectile('red'); }
+            if (k === '3') { highlightUI('skill-purple'); shootProjectile('purple'); }
+            if (k === '4') { highlightUI('skill-domain'); activateDomain(); }
+            if (k === '5') { highlightUI('skill-teleport'); teleport(); }
+            if (k === 'z') { highlightUI('skill-melee'); castMelee(); }
+            
+            if (k === 'f') {
+                cameraMode = cameraMode === 3 ? 1 : (cameraMode === 1 ? 2 : 3);
+                updateStatus(`視角: ${ {1:"第一人稱", 2:"俯瞰視角", 3:"第三人稱"}[cameraMode] }`);
+            }
+        }
+        function onKeyUp(event) { const k = event.key.toLowerCase(); if (keys.hasOwnProperty(k)) keys[k] = false; }
         
-        function triggerVictory() {
-            state.gameWon = true; state.gameActive = false; document.exitPointerLock(); modalContainer.classList.remove('hidden'); victoryModal.classList.remove('hidden');
-            createExplosion(player.position, 0xfacc15, 100, 5.0); createExplosion(new THREE.Vector3(player.position.x+5, 5, player.position.z+5), 0x60a5fa, 50, 3.0); createExplosion(new THREE.Vector3(player.position.x-5, 5, player.position.z-5), 0xef4444, 50, 3.0);
+        function onMouseMove(event) { 
+            if (isRightMouseDown) {
+                cameraOrbitAngle -= event.movementX * 0.005; cameraPitchAngle -= event.movementY * 0.005;
+                cameraPitchAngle = THREE.MathUtils.clamp(cameraPitchAngle, 0.1, Math.PI / 2.1);
+            }
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1; 
+        }
+        
+        function onMouseWheel(event) { if(!gameStarted) return; cameraDistance += Math.sign(event.deltaY) * 2; cameraDistance = THREE.MathUtils.clamp(cameraDistance, 10, 60); }
+
+        function teleport() {
+            if (!gameStarted || (isCDEnabled && cooldowns.teleport > 0) || skillCharge.active) return;
+            if (isCDEnabled) cooldowns.teleport = cdMax.teleport;
+            
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground);
+            if(intersects.length > 0) {
+                const startPos = playerGroup.position.clone();
+                const targetPos = new THREE.Vector3(intersects[0].point.x, playerGroup.position.y, intersects[0].point.z);
+
+                createAfterimage(startPos, playerGroup.rotation.y);
+                createSpatialGlitch(startPos); createImplosionParticles(startPos, 2.5, 0x0088ff, 6);
+
+                playerGroup.position.copy(targetPos);
+                playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -145, 145);
+                playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -145, 145);
+                
+                createSpatialGlitch(playerGroup.position); createImplosionParticles(playerGroup.position, 1.5, 0x00ffff, 4);
+
+                triggerFlashCut(); announceSkillText("無下限瞬移", "#ffffff"); triggerCinematic('teleport', 0.2); 
+            }
         }
 
-        window.onload = function() {
-            initEngine(); gameLoop();
-            startGameBtn.addEventListener('click', startGame); restartGameBtn.addEventListener('click', startGame); victoryRestartBtn.addEventListener('click', startGame);
-            viewToggleBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleCameraView(); });
-
-            settingsBtn.addEventListener('click', () => {
-                if(state.gameActive && !state.mobileMode) document.exitPointerLock();
-                modalContainer.classList.remove('hidden'); settingsModal.classList.remove('hidden'); startModal.classList.add('hidden'); gameoverModal.classList.add('hidden'); victoryModal.classList.add('hidden'); state.gameActive = false; 
-            });
-
-            closeSettingsBtn.addEventListener('click', () => {
-                applySettings(); modalContainer.classList.add('hidden'); settingsModal.classList.add('hidden');
-                if(!state.gameWon && state.hp > 0) state.gameActive = true; clock.getDelta(); 
-            });
+        function activateDomain() {
+            if (!gameStarted || domainState.active || (isCDEnabled && cooldowns.domain > 0) || skillCharge.active) return;
+            if (isCDEnabled) cooldowns.domain = cdMax.domain;
             
-            toggleCinematic.addEventListener('change', applySettings); toggleMobile.addEventListener('change', applySettings);
+            domainState = { active: true, timer: 0, phase: 'prelude', group: new THREE.Group(), infoParticles: null };
+            domainState.group.position.copy(playerGroup.position); scene.add(domainState.group);
+            
+            document.getElementById('ui-layer').classList.add('domain-ui-mode');
+            document.getElementById('title-text').innerText = "領域展開 · 無量空處"; announceSkillText("領域展開「無量空處」", "#aa00ff");
+            
+            isAttacking = true; attackType = 6; attackTimer = 1.0; triggerCinematic('domain', 8.0); 
+            
+            cityElements.forEach(b => { if(b.material && b.material.color) b.material.color.setHex(0x010101); });
+            scene.fog.color.setHex(0x000000); scene.background.setHex(0x000000);
+        }
 
-            const bindSkill = (btn, func) => {
-                btn.addEventListener('mousedown', (e) => { e.stopPropagation(); func(); });
-                btn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); func(); }, {passive: false});
-            };
+        function updateDomainSequence(delta, time) {
+            domainState.timer += delta; let t = domainState.timer;
 
-            bindSkill(btnS1, triggerPunch); bindSkill(btnS2, triggerKick); bindSkill(btnS3, triggerSkillBlue); bindSkill(btnS4, triggerSkillRed); bindSkill(btnS5, triggerSkillPurple);
-            bindSkill(btnS6, triggerLimitless); bindSkill(btnS7, triggerTeleport); bindSkill(btnS8, triggerHeal); bindSkill(btnS9, triggerSurge); bindSkill(btnS10, triggerSkillDomain);
+            if (t > 0.5 && domainState.phase === 'prelude') {
+                domainState.phase = 'burst';
+                const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '1'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
+                screenShake = 3.0;
+
+                const wireMesh1 = new THREE.Mesh(new THREE.IcosahedronGeometry(120, 3), new THREE.MeshBasicMaterial({ color: 0xaa00ff, wireframe: true, transparent: true, opacity: 0.2 }));
+                const wireMesh2 = new THREE.Mesh(new THREE.OctahedronGeometry(140, 2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.15 }));
+                const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 32), new THREE.MeshBasicMaterial({ color: 0x020011, side: THREE.BackSide }));
+                
+                domainState.group.add(dome); domainState.group.add(wireMesh1); domainState.group.add(wireMesh2);
+                domainState.group.scale.set(0.01, 0.01, 0.01);
+                
+                domainFreeze = true;
+                if (dummyTorso) createParticles(dummyPhysics.position, 0xaa00ff, 40, 5);
+            }
+
+            if (t > 1.0 && domainState.phase === 'burst') {
+                domainState.phase = 'climax';
+                const pGeo = new THREE.BufferGeometry(); const pPos = [];
+                for(let i=0; i<800; i++) pPos.push((Math.random()-0.5)*200, (Math.random()-0.5)*200, (Math.random()-0.5)*200);
+                pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+                domainState.infoParticles = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0x00ffff, size: 0.8, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending}));
+                domainState.group.add(domainState.infoParticles);
+            }
+
+            if (domainState.phase === 'burst' || domainState.phase === 'climax') {
+                domainState.group.scale.lerp(new THREE.Vector3(1,1,1), 5 * delta); 
+                domainState.group.children.forEach((child, idx) => {
+                    if (child.geometry && child.geometry.type !== 'SphereGeometry' && child.type !== 'Points') {
+                        child.rotation.x += (idx%2==0?1:-1) * 0.2 * delta; child.rotation.y += 0.3 * delta;
+                    }
+                });
+                
+                if (domainState.infoParticles) {
+                    const posArr = domainState.infoParticles.geometry.attributes.position.array;
+                    for (let i = 0; i < posArr.length; i += 3) {
+                        posArr[i+1] -= 20 * delta; if (posArr[i+1] < -100) posArr[i+1] = 100; posArr[i] += Math.sin(time*2 + i)*0.5; 
+                    }
+                    domainState.infoParticles.geometry.attributes.position.needsUpdate = true;
+                }
+                if (dummyTorso && Math.random() < 0.2) { let dPos = new THREE.Vector3().copy(dummyPhysics.position); dPos.y += Math.random()*2; createParticles(dPos, 0x00ffff, 1, 0.5); }
+            }
+
+            if (t > 8.0 && domainState.phase === 'climax') {
+                domainState.phase = 'fade';
+                const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '0.8'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
+                scene.remove(domainState.group); domainState.active = false; domainFreeze = false;
+                scene.background = new THREE.Color(0x0a0f1a); scene.fog.color = new THREE.Color(0x0a0f1a);
+                cityElements.forEach(b => { if(b.material && b.material.color) { if(b.geometry && b.geometry.type === 'BoxGeometry') b.material.color.setHex(0x13131c); else b.material.color.setHex(0x00aaff); } }); 
+                document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟 - 澀谷事變"; updateStatus("無下限常駐中");
+            }
+        }
+
+        // --- 主迴圈 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!gameStarted) {
+                camera.position.x = Math.sin(clock.getElapsedTime() * 0.4) * 35; camera.position.z = Math.cos(clock.getElapsedTime() * 0.4) * 35; camera.position.y = 18; camera.lookAt(0, 5, 0); renderer.render(scene, camera); return;
+            }
+            
+            const rawDelta = clock.getDelta();
+            if (timeScale < 1.0) { timeScale += rawDelta * 0.5; if (timeScale > 1.0) timeScale = 1.0; }
+            const delta = rawDelta * timeScale;
+            const time = clock.getElapsedTime();
+
+            Object.keys(cooldowns).forEach(key => {
+                if (cooldowns[key] > 0) { cooldowns[key] -= rawDelta; if (cooldowns[key] <= 0) cooldowns[key] = 0; updateCooldownUI(key, cooldowns[key], cdMax[key]); }
+            });
+
+            // 1. 玩家物理碰撞移動 (WASD 隨視角方向移動)
+            if (!domainState.active || domainState.timer < 0.5) {
+                const speed = 24 * delta; 
+                let dx = 0, dz = 0;
+                let inputX = 0, inputZ = 0;
+                if (keys.w) inputZ -= 1; if (keys.s) inputZ += 1;
+                if (keys.a) inputX -= 1; if (keys.d) inputX += 1;
+
+                if ((inputX !== 0 || inputZ !== 0) && !skillCharge.active) {
+                    let length = Math.sqrt(inputX * inputX + inputZ * inputZ); inputX /= length; inputZ /= length;
+                    let rotatedX = inputX * Math.cos(cameraOrbitAngle) + inputZ * Math.sin(cameraOrbitAngle);
+                    let rotatedZ = -inputX * Math.sin(cameraOrbitAngle) + inputZ * Math.cos(cameraOrbitAngle);
+                    dx = rotatedX * speed; dz = rotatedZ * speed;
+
+                    let newX = playerGroup.position.x + dx; let newZ = playerGroup.position.z + dz;
+                    let pRad = 1.2; let hitX = false, hitZ = false;
+
+                    let dMinX = dummyGroup.position.x - 1.5 - pRad; let dMaxX = dummyGroup.position.x + 1.5 + pRad;
+                    let dMinZ = dummyGroup.position.z - 1.5 - pRad; let dMaxZ = dummyGroup.position.z + 1.5 + pRad;
+                    if (newX > dMinX && newX < dMaxX && playerGroup.position.z > dMinZ && playerGroup.position.z < dMaxZ) hitX = true;
+                    if (playerGroup.position.x > dMinX && playerGroup.position.x < dMaxX && newZ > dMinZ && newZ < dMaxZ) hitZ = true;
+
+                    for (let el of cityElements) {
+                        if (el.userData && el.userData.isSolid && el.visible && !el.userData.isCollapsing) {
+                            let minX = el.position.x - el.userData.halfW - pRad; let maxX = el.position.x + el.userData.halfW + pRad;
+                            let minZ = el.position.z - el.userData.halfD - pRad; let maxZ = el.position.z + el.userData.halfD + pRad;
+                            
+                            if (newX > minX && newX < maxX && playerGroup.position.z > minZ && playerGroup.position.z < maxZ) hitX = true;
+                            if (playerGroup.position.x > minX && playerGroup.position.x < maxX && newZ > minZ && newZ < maxZ) hitZ = true;
+                        }
+                    }
+
+                    if (!hitX) playerGroup.position.x = newX;
+                    if (!hitZ) playerGroup.position.z = newZ;
+
+                    playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -145, 145);
+                    playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -145, 145);
+                }
+
+                raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground); let aimPoint = new THREE.Vector3();
+                if(intersects.length > 0) {
+                    aimPoint.copy(intersects[0].point);
+                    if (!isAttacking) {
+                        const targetAngle = Math.atan2(aimPoint.x - playerGroup.position.x, aimPoint.z - playerGroup.position.z);
+                        playerGroup.rotation.y = THREE.MathUtils.lerp(playerGroup.rotation.y, targetAngle, 10 * delta);
+                    }
+                }
+            }
+
+            playerGroup.position.y = 1.8 + Math.sin(time * 3) * 0.2;
+            if ((keys.w || keys.s || keys.a || keys.d) && Math.random() < 0.25 && !skillCharge.active) {
+                let ripplePos = playerGroup.position.clone(); ripplePos.y = 0.05; spawnBarrierRipple(ripplePos);
+            }
+
+            if (!domainFreeze && !skillCharge.active) {
+                dummyAttackTimer -= delta;
+                if (dummyAttackTimer <= 0) { dummyShootAttack(); dummyAttackTimer = 3.0; }
+            }
+
+            for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                let ep = enemyProjectiles[i];
+                if (!domainFreeze) {
+                    let distToGojo = ep.mesh.position.distanceTo(new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z));
+                    if (distToGojo < 3.0) {
+                        ep.speed *= Math.pow(0.1, delta * 10); 
+                        ep.mesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08));
+                        if (Math.random() < 0.15 && ep.speed > 0.5) {
+                            let hitSurfacePos = ep.mesh.position.clone().sub(playerGroup.position).normalize().multiplyScalar(1.6).add(playerGroup.position);
+                            hitSurfacePos.y += 0.8; spawnBarrierRipple(hitSurfacePos);
+                        }
+                    }
+                    ep.mesh.position.addScaledVector(ep.dir, ep.speed * delta); ep.life -= delta;
+                }
+                if (ep.life <= 0 || ep.speed < 0.05) { createParticles(ep.mesh.position, 0xff3300, 10); scene.remove(ep.mesh); enemyProjectiles.splice(i, 1); }
+            }
+
+            for (let i = barrierRipples.length - 1; i >= 0; i--) {
+                let r = barrierRipples[i]; r.scale += delta * 3.0; r.life -= delta * 1.5;
+                r.mesh.scale.set(r.scale, r.scale, 1); r.mesh.material.opacity = r.life;
+                if (r.life <= 0) { scene.remove(r.mesh); barrierRipples.splice(i, 1); }
+            }
+
+            if (shijimaDome && shijimaDome2) {
+                shijimaDome.rotation.y += 0.01 * delta; shijimaDome.scale.setScalar(1.0 + Math.sin(time * 0.8) * 0.015);
+                shijimaDome2.rotation.y -= 0.007 * delta; shijimaDome2.scale.setScalar(0.98 + Math.cos(time * 1.1) * 0.012);
+            }
+
+            cityElements.forEach(el => {
+                if (el.userData && el.userData.glitchIntensity) {
+                    if (el.material && el.material.emissiveMap) {
+                        if (Math.random() < 0.05 * el.userData.glitchIntensity) { el.material.emissiveIntensity = Math.random() > 0.5 ? 0.05 : 0.8; }
+                    }
+                    if (el.userData.shakeTimer > 0) {
+                        el.userData.shakeTimer -= delta; el.position.x += (Math.random() - 0.5) * 0.4; el.position.z += (Math.random() - 0.5) * 0.4;
+                        if (el.userData.shakeTimer <= 0) { el.position.x = el.userData.currentPosX || el.position.x; el.position.z = el.userData.currentPosZ || el.position.z; }
+                    }
+                    if (el.userData.isCollapsing) {
+                        el.scale.y = THREE.MathUtils.lerp(el.scale.y, el.userData.targetScaleY, 6 * delta);
+                        el.position.y = THREE.MathUtils.lerp(el.position.y, el.userData.targetPosY, 6 * delta);
+                        if (el.userData.outlineLine) { el.userData.outlineLine.scale.set(el.scale.x + 0.15, el.scale.y + 0.15, el.scale.z + 0.15); el.userData.outlineLine.position.copy(el.position); }
+                        if (el.userData.slime) { el.userData.slime.position.y = THREE.MathUtils.lerp(el.userData.slime.position.y, el.userData.targetPosY, 4 * delta); }
+                    }
+                }
+            });
+
+            if (domainState.active) { updateDomainSequence(delta, time); }
+
+            if (dummyTorso) {
+                if (domainFreeze) {
+                    dummyPhysics.angleX = 0; dummyPhysics.angleZ = 0;
+                    dummyTorso.children.forEach(c => { if (c.material) { c.material.transparent = true; c.material.opacity = 0.3; } });
+                } else {
+                    dummyTorso.children.forEach(c => { if (c.material) { c.material.transparent = false; c.material.opacity = 1.0; } });
+                    const forceX = -dummyPhysics.springK * dummyPhysics.angleX - dummyPhysics.damping * dummyPhysics.velX;
+                    const forceZ = -dummyPhysics.springK * dummyPhysics.angleZ - dummyPhysics.damping * dummyPhysics.velZ;
+                    dummyPhysics.velX += forceX * delta; dummyPhysics.velZ += forceZ * delta;
+                    dummyPhysics.angleX += dummyPhysics.velX * delta; dummyPhysics.angleZ += dummyPhysics.velZ * delta;
+                    dummyTorso.rotation.x = dummyPhysics.angleX; dummyTorso.rotation.z = dummyPhysics.angleZ;
+                }
+            }
+
+            // 物理系統更新：龜裂 -> 粉碎 -> 飛散落地
+            for (let i = crackDecals.length - 1; i >= 0; i--) {
+                let c = crackDecals[i]; c.life -= delta;
+                c.mesh.scale.setScalar(1 + (0.3 - c.life) * 2);
+                if(c.mesh.children[0]) c.mesh.children[0].material.opacity = c.life / 0.3;
+                if (c.life <= 0) {
+                    scene.remove(c.mesh); spawnPhysicsDebris(c.pos, c.colorHex, Math.floor(c.size * 5)); crackDecals.splice(i, 1);
+                }
+            }
+
+            if (!domainFreeze) {
+                for (let i = physicsDebris.length - 1; i >= 0; i--) {
+                    const deb = physicsDebris[i]; deb.life -= delta; 
+                    if (deb.initialLife - deb.life > 0.2) { deb.velocity.x *= 0.85; deb.velocity.z *= 0.85; }
+                    deb.velocity.y += deb.gravity * delta; deb.mesh.position.addScaledVector(deb.velocity, delta);
+                    
+                    if (deb.mesh.position.y < 0.15) { 
+                        deb.mesh.position.y = 0.15; deb.velocity.y = -deb.velocity.y * 0.3; deb.velocity.x *= 0.5; deb.velocity.z *= 0.5; 
+                    }
+                    deb.mesh.rotation.x += deb.velocity.y * 0.1 * delta; deb.mesh.rotation.y += deb.velocity.x * 0.1 * delta;
+                    
+                    if (deb.mesh.material) { deb.mesh.material.emissiveIntensity = (deb.life / 0.7) * 2.0; deb.mesh.material.opacity = deb.life / 0.7; deb.mesh.material.transparent = true; }
+                    if (deb.life <= 0) { scene.remove(deb.mesh); physicsDebris.splice(i, 1); }
+                }
+            }
+
+            // 8. 招式蓄力系統與背景隱藏
+            if (skillCharge.active) {
+                skillCharge.time += delta;
+                
+                if (skillCharge.type === 'purple') {
+                    skillCharge.blueOrb.position.y = 1.5 + Math.sin(time * 10) * 0.2; skillCharge.redOrb.position.y = 1.5 + Math.cos(time * 10) * 0.2;
+                    skillCharge.blueOrb.children.forEach(child => { if (child.geometry && child.geometry.type === 'TorusGeometry') { child.rotation.x += 10 * delta; child.rotation.y += 10 * delta; } });
+                    screenShake = skillCharge.time * 0.8; 
+                    if (Math.random() < 0.4) { let bPos = new THREE.Vector3(); skillCharge.blueOrb.getWorldPosition(bPos); createParticles(bPos, 0x00aaff, 2); createImplosionParticles(bPos, 10, 0x00ffff, 3); }
+                    if (Math.random() < 0.4) { let rPos = new THREE.Vector3(); skillCharge.redOrb.getWorldPosition(rPos); createParticles(rPos, 0xff0055, 2); createImplosionParticles(rPos, 10, 0xff0000, 3); }
+
+                    if (skillCharge.time > 0.6 && skillCharge.time < 1.2) {
+                        skillCharge.blueOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta); skillCharge.redOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta);
+                        createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x02000a, 5); 
+                    }
+                } else {
+                    screenShake = skillCharge.time * 2.0;
+                    if (Math.random() < 0.5) createImplosionParticles(playerGroup.position, 15, skillCharge.type === 'blue' ? 0x00aaff : 0xff0055, 4);
+                }
+
+                if (skillCharge.time >= skillCharge.maxTime) {
+                    toggleCityVisibility(true); 
+                    
+                    if (skillCharge.type === 'purple') {
+                        playerGroup.remove(skillCharge.blueOrb); playerGroup.remove(skillCharge.redOrb);
+                        let fusionPos = new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld);
+                        createParticles(fusionPos, 0xaa00ff, 100); createParticles(fusionPos, 0x02000a, 50);  
+                        timeScale = 0.1; screenShake = 3.5; spawnActualProjectile('purple_fire'); 
+                    } else {
+                        spawnActualProjectile(skillCharge.type);
+                    }
+                    skillCharge.active = false;
+                }
+            }
+
+            if (attackTimer > 0) {
+                attackTimer -= delta;
+                if (attackType === 0) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.5, 40*delta); playerGroup.rotation.y += 15*delta; }
+                else if (attackType === 1) { leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.5, 40*delta); playerGroup.rotation.y -= 15*delta; }
+                else if (attackType === 2) { rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, -Math.PI/1.6, 40*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, Math.PI/4, 20*delta); }
+                else if (attackType === 3) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2.5, 15*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2.5, 15*delta); }
+                else if (attackType === 4) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 30*delta); playerGroup.rotation.y += 5*delta; playerGroup.position.addScaledVector(new THREE.Vector3(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y)), -8*delta); }
+                else if (attackType === 5) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2.5, 15*delta); rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/8, 15*delta); playerGroup.rotation.y += 2*delta; }
+                else if (attackType === 6) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 20*delta); rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/4, 20*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2, 20*delta); leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, -Math.PI/4, 20*delta); }
+            } else {
+                isAttacking = false;
+                leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, 0, 10*delta); rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, 0, 10*delta); rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, 0, 10*delta); leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, 0, 10*delta);
+                leftLegGroup.rotation.x = THREE.MathUtils.lerp(leftLegGroup.rotation.x, 0, 10*delta); rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, 0, 10*delta);
+                if ((keys.w || keys.s || keys.a || keys.d) && (!domainState.active || domainState.timer < 0.5) && !skillCharge.active) {
+                    leftLegGroup.rotation.x = Math.sin(time*12)*0.6; rightLegGroup.rotation.x = -Math.sin(time*12)*0.6; leftArmGroup.rotation.x = -Math.sin(time*12)*0.6; rightArmGroup.rotation.x = Math.sin(time*12)*0.6;
+                }
+            }
+
+            let targetCamPos = new THREE.Vector3(); let targetLookAt = new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.5, playerGroup.position.z); let camLerpSpeed = 5;
+
+            if (cinematic.active && cinematic.timer > 0) {
+                cinematic.timer -= delta; let progress = 1 - (cinematic.timer / cinematic.duration); camLerpSpeed = 8; 
+                raycaster.setFromCamera(mouse, camera); const aimPoint = raycaster.intersectObject(ground)[0]?.point || targetLookAt;
+                
+                if (cinematic.type === 'melee' || cinematic.type === 'teleport') { targetCamPos.copy(new THREE.Vector3(3, 2, -5).applyMatrix4(playerGroup.matrixWorld)); } 
+                else if (cinematic.type === 'blue') { targetCamPos.copy(new THREE.Vector3(4, 3, -8).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
+                else if (cinematic.type === 'red') { targetCamPos.copy(new THREE.Vector3(-4, 0.5, -3).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
+                else if (cinematic.type === 'purple') { targetCamPos.copy(new THREE.Vector3(0, 4, -cameraDistance*0.8).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(playerGroup.position); targetLookAt.y += 1.5; } 
+                else if (cinematic.type === 'purple_fire') { targetCamPos.copy(new THREE.Vector3(2, 3, -10).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); }
+                else if (cinematic.type === 'domain') { let angle = progress * Math.PI * 1.5; targetCamPos.set(playerGroup.position.x + Math.cos(angle)*15, playerGroup.position.y + 5 + Math.sin(progress*Math.PI)*5, playerGroup.position.z + Math.sin(angle)*15); }
+            } else {
+                cinematic.active = false;
+                if (cameraMode === 3) {
+                    let offsetX = Math.sin(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle);
+                    let offsetY = Math.sin(cameraPitchAngle) * cameraDistance;
+                    let offsetZ = Math.cos(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle);
+                    targetCamPos.set(playerGroup.position.x + offsetX, playerGroup.position.y + offsetY, playerGroup.position.z + offsetZ);
+                    targetLookAt.copy(playerGroup.position); targetLookAt.y += 1.5; camLerpSpeed = 10; 
+                } 
+                else if (cameraMode === 1) {
+                    targetCamPos.set(playerGroup.position.x, playerGroup.position.y + 1.8, playerGroup.position.z);
+                    const aimPoint = raycaster.intersectObject(ground)[0]?.point || new THREE.Vector3();
+                    targetLookAt.copy(new THREE.Vector3().addVectors(targetCamPos, new THREE.Vector3().subVectors(aimPoint, targetCamPos).normalize())); camLerpSpeed = 15; 
+                } 
+                else if (cameraMode === 2) {
+                    targetCamPos.set(playerGroup.position.x, playerGroup.position.y + cameraDistance*1.5, playerGroup.position.z + 10);
+                }
+            }
+
+            camera.position.lerp(targetCamPos, camLerpSpeed * delta); smoothCameraLookAt.lerp(targetLookAt, (camLerpSpeed + 2) * delta); camera.lookAt(smoothCameraLookAt);
+
+            if (screenShake > 0) { camera.position.add(new THREE.Vector3((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake)); screenShake *= 0.85; if (screenShake < 0.05) screenShake = 0; }
+
+            for (let i = shockwaves.length - 1; i >= 0; i--) {
+                let sw = shockwaves[i]; sw.scale += (sw.maxScale - sw.scale)*10*delta; sw.life -= delta*1.5; sw.mesh.scale.set(sw.scale, sw.scale, 1); sw.mesh.material.opacity = sw.life;
+                if (sw.life <= 0) { scene.remove(sw.mesh); shockwaves.splice(i, 1); }
+            }
+            
+            for (let i = impactFlashes.length - 1; i >= 0; i--) {
+                let f = impactFlashes[i]; f.life -= delta; let progress = f.life / 0.15;
+                f.light.intensity = progress * 10; f.meshes.forEach(m => m.material.opacity = progress);
+                f.group.scale.setScalar(1 + (1 - progress) * 2);
+                if (f.life <= 0) { scene.remove(f.group); impactFlashes.splice(i, 1); }
+            }
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let p = projectiles[i]; p.mesh.position.addScaledVector(p.dir, p.speed * delta); p.life -= delta;
+
+                checkBuildingHits(p.mesh.position, p.size, p.dir, p.type);
+
+                if (p.mesh.position.distanceTo(dummyPhysics.position) < (p.size + 1.2) && !domainFreeze) {
+                    let pushForce = 35; if (p.type === 'purple') pushForce = 90; if (p.type === 'blue') pushForce = -20;  
+                    dummyPhysics.velX = p.dir.z * pushForce; dummyPhysics.velZ = -p.dir.x * pushForce;
+                    spawnCrackAndShatter(p.mesh.position, (p.type==='purple'?0xaa00ff:(p.type==='blue'?0x00aaff:0xff0055)), p.type === 'purple' ? 10 : 5, true);
+                    p.life = 0;
+                }
+
+                if (p.type === 'blue') {
+                    p.mesh.children.forEach(c => { if(c.geometry && c.geometry.type==='TorusGeometry') { c.rotation.x+=12*delta; c.rotation.y+=12*delta; }});
+                    screenShake = Math.max(screenShake, 0.2); if(Math.random()<0.6) createImplosionParticles(p.mesh.position, 12, 0x0088ff, 3);
+                }
+                if (p.type === 'red') {
+                    p.mesh.scale.addScalar(4*delta); screenShake = Math.max(screenShake, 0.4); 
+                    if(Math.random()<0.7) createParticles(p.mesh.position, 0xff3300, 5, 30); if(Math.random()<0.3) createParticles(p.mesh.position, 0xff0000, 2, 60); 
+                }
+                if (p.type === 'purple') {
+                    p.mesh.scale.addScalar(1.5*delta); p.mesh.rotation.y+=5*delta; p.mesh.rotation.x+=3*delta; screenShake = 0.6; 
+                    if(Math.random()<0.8) createParticles(p.mesh.position, 0x050011, 8); if(Math.random()<0.5) createParticles(p.mesh.position, p.color, 5); if(Math.random()<0.3) createImplosionParticles(p.mesh.position, 15, 0xaa00ff, 2);
+                }
+
+                if (p.life <= 0) {
+                    if (p.type === 'purple') { screenShake = 4.0; createParticles(p.mesh.position, 0x02000a, 80); } 
+                    else if (p.type === 'red') { screenShake = 1.5; } 
+                    else if (p.type === 'blue') { screenShake = 2.0; createImplosionParticles(p.mesh.position, 25, 0x00ffff, 80); }
+                    
+                    spawnCrackAndShatter(p.mesh.position, p.color, p.type === 'purple' ? 12 : 5, false);
+                    scene.remove(p.mesh); projectiles.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let ps = particles[i];
+                if (!domainFreeze || ps.mesh === domainState.infoParticles) {
+                    const posArr = ps.mesh.geometry.attributes.position.array;
+                    for (let j = 0; j < posArr.length; j += 3) { posArr[j]+=ps.velocities[j]*delta; posArr[j+1]+=ps.velocities[j+1]*delta; posArr[j+2]+=ps.velocities[j+2]*delta; }
+                    ps.mesh.geometry.attributes.position.needsUpdate = true; ps.life -= delta; ps.mesh.material.opacity = ps.life;
+                }
+                if (ps.life <= 0 && ps.mesh !== domainState.infoParticles) { scene.remove(ps.mesh); particles.splice(i, 1); }
+            }
+
+            for (let i = spatialGlitches.length - 1; i >= 0; i--) {
+                let g = spatialGlitches[i]; g.life -= delta; g.mesh.material.opacity = g.life / 0.15;
+                g.mesh.position.x += (Math.random() - 0.5) * 0.1; 
+                if (g.life <= 0) { scene.remove(g.mesh); spatialGlitches.splice(i, 1); }
+            }
+            for (let i = afterimages.length - 1; i >= 0; i--) {
+                let ghost = afterimages[i]; ghost.life -= delta; let progress = 1 - (ghost.life / 0.25); 
+                ghost.group.scale.set(1 - progress, 1 + progress * 1.5, 1 - progress); 
+                ghost.group.children.forEach(c => c.material.opacity = (ghost.life / 0.25) * 0.5);
+                if (ghost.life <= 0) { scene.remove(ghost.group); afterimages.splice(i, 1); }
+            }
+
+            renderer.render(scene, camera);
         }
     </script>
 </body>
