@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>咒術迴戰：澀谷事變 - 絕對碰撞與物理粉碎版</title>
+    <title>咒術迴戰：澀谷事變 - 無量空處極致版</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -13,6 +13,7 @@
         }
         #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
+        /* UI 介面設計 */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; transition: opacity 0.5s; }
         .panel {
             background: rgba(5, 5, 15, 0.85); border: 1px solid rgba(138, 43, 226, 0.4);
@@ -40,6 +41,7 @@
         p { margin: 5px 0; font-size: 14px; color: #ddd; }
         .highlight { color: #00ffff; font-weight: bold; text-shadow: 0 0 8px #00ffff; }
         
+        /* 技能大字宣告特效 */
         #skill-announce {
             position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%) scale(0.5);
             font-size: 45px; font-weight: 900; color: #fff; letter-spacing: 12px;
@@ -49,6 +51,7 @@
         }
         #skill-announce.show { transform: translateX(-50%) scale(1); opacity: 1; }
 
+        /* 技能按鈕與 CD 遮罩 */
         .skill-box {
             position: relative; width: 65px; height: 65px; background: rgba(0, 0, 10, 0.6);
             border: 2px solid #333; border-radius: 10px; display: flex; flex-direction: column;
@@ -128,11 +131,10 @@
 
         <div id="gear-btn" title="遊戲設定">⚙️</div>
         <div id="settings-modal" class="panel">
-            <label style="font-size: 12px; color:#aaa;">空間透鏡與物理破壞</label>
+            <label style="font-size: 12px; color:#aaa;">空間透鏡與物理</label>
             <select id="quality">
-                <option value="ultra" selected>極致 (全物理破壞 + 空間透鏡)</option>
-                <option value="high">流暢 (標準光暈 + 簡化物理)</option>
-                <option value="low">效能 (關閉物理破壞引擎)</option>
+                <option value="ultra" selected>極致 (折射透鏡 + 窗戶光影)</option>
+                <option value="high">流暢 (標準光暈 + 精簡特效)</option>
             </select>
             
             <label style="font-size: 12px; color:#aaa; margin-top:5px;">招式運鏡系統</label>
@@ -159,11 +161,46 @@
     </div>
 
     <script>
-        // --- 遊戲狀態與介面邏輯 ---
+        // --- 全域變數宣告 ---
         let gameStarted = false;
         let isSettingsOpen = false;
         let isCDEnabled = true;
 
+        let scene, camera, renderer, clock = new THREE.Clock();
+        
+        let playerGroup, leftArmGroup, rightArmGroup, leftLegGroup, rightLegGroup, limitlessBarrier;
+        let projectiles = [], particles = [], physicsDebris = [], shockwaves = [], barrierRipples = [], enemyProjectiles = [], cityElements = [], ground;
+        
+        let spatialGlitches = [], afterimages = [], impactFlashes = []; 
+        let crackDecals = []; 
+        
+        let dummyGroup, dummyTorso, dummyHead;
+        let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
+        let dummyAttackTimer = 3.0; 
+        
+        let domainState = { active: false, timer: 0, phase: 'none', group: null, infoParticles: null };
+        let domainFreeze = false;
+
+        const keys = { w: false, a: false, s: false, d: false };
+        const mouse = new THREE.Vector2(); const raycaster = new THREE.Raycaster();
+        
+        let quality = 'ultra';
+        let cameraMode = 3; let cameraDistance = 25; let smoothCameraLookAt = new THREE.Vector3(); 
+        let isRightMouseDown = false; let cameraOrbitAngle = 0; let cameraPitchAngle = Math.PI / 4; 
+        
+        let isCinematicEnabled = true; let cinematic = { active: false, timer: 0, duration: 0, type: '' };
+        
+        let screenShake = 0; let timeScale = 1.0;
+        
+        let skillCharge = { active: false, type: '', time: 0, maxTime: 0, blueOrb: null, redOrb: null };
+        let isAttacking = false; let attackType = 0; let attackTimer = 0;
+
+        let shijimaDome = null, shijimaDome2 = null;
+
+        const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5 };
+        const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0 };
+
+        // --- UI 事件綁定 ---
         document.getElementById('start-btn').addEventListener('click', function(e) {
             triggerBrittleShatter(this, () => {
                 document.getElementById('intro-screen').style.display = 'none';
@@ -184,46 +221,22 @@
             if (!isCDEnabled) Object.keys(cooldowns).forEach(key => cooldowns[key] = 0);
         });
 
-        // --- 核心 3D 變數 ---
-        let scene, camera, renderer, clock = new THREE.Clock();
-        
-        let playerGroup, leftArmGroup, rightArmGroup, leftLegGroup, rightLegGroup, limitlessBarrier;
-        let projectiles = [], particles = [], physicsDebris = [], shockwaves = [], barrierRipples = [], enemyProjectiles = [], cityElements = [], ground;
-        
-        let spatialGlitches = [], afterimages = [], impactFlashes = []; 
-        let crackDecals = []; // 物理引擎：龜裂紋路容器
-        
-        let dummyGroup, dummyTorso, dummyHead;
-        let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
-        let dummyAttackTimer = 3.0; 
-        
-        let domainState = { active: false, timer: 0, phase: 'none', group: null, infoParticles: null };
-        let domainFreeze = false;
+        document.getElementById('quality').addEventListener('change', (e) => { 
+            quality = e.target.value; renderer.shadowMap.enabled = (quality === 'ultra'); updateLimitlessBarrierMaterial(); 
+        });
 
-        const keys = { w: false, a: false, s: false, d: false };
-        const mouse = new THREE.Vector2(); const raycaster = new THREE.Raycaster();
-        
-        let quality = 'ultra';
-        let cameraMode = 3; let cameraDistance = 25; let smoothCameraLookAt = new THREE.Vector3(); 
-        let isRightMouseDown = false; let cameraOrbitAngle = 0; let cameraPitchAngle = Math.PI / 4; 
-        
-        let isCinematicEnabled = true; let cinematic = { active: false, timer: 0, duration: 0, type: '' };
-        
-        let screenShake = 0; let timeScale = 1.0;
-        
-        // 統一招式蓄力系統
-        let skillCharge = { active: false, type: '', time: 0, maxTime: 0, blueOrb: null, redOrb: null };
-        
-        let isAttacking = false; let attackType = 0; let attackTimer = 0;
+        document.getElementById('cinematic-toggle').addEventListener('change', (e) => { 
+            isCinematicEnabled = (e.target.value === 'on'); 
+        });
 
-        let shijimaDome = null, shijimaDome2 = null;
+        document.getElementById('skill-blue').onclick = () => shootProjectile('blue');
+        document.getElementById('skill-red').onclick = () => shootProjectile('red');
+        document.getElementById('skill-purple').onclick = () => shootProjectile('purple');
+        document.getElementById('skill-domain').onclick = () => activateDomain();
+        document.getElementById('skill-teleport').onclick = () => teleport();
+        document.getElementById('skill-melee').onclick = () => castMelee();
 
-        const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5 };
-        const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0 };
-
-        init();
-        animate();
-
+        // --- 核心系統函式 ---
         function init() {
             const container = document.getElementById('game-container');
 
@@ -247,17 +260,6 @@
             window.addEventListener('mousedown', (e) => { if (e.button === 2) isRightMouseDown = true; });
             window.addEventListener('mouseup', (e) => { if (e.button === 2) isRightMouseDown = false; });
             window.addEventListener('contextmenu', e => e.preventDefault()); 
-            
-            document.getElementById('quality').addEventListener('change', (e) => { quality = e.target.value; renderer.shadowMap.enabled = (quality === 'ultra'); updateLimitlessBarrierMaterial(); });
-            document.getElementById('cinematic-toggle').addEventListener('change', (e) => { isCinematicEnabled = (e.target.value === 'on'); });
-
-            // 按鈕事件綁定
-            document.getElementById('skill-blue').onclick = () => shootProjectile('blue');
-            document.getElementById('skill-red').onclick = () => shootProjectile('red');
-            document.getElementById('skill-purple').onclick = () => shootProjectile('purple');
-            document.getElementById('skill-domain').onclick = () => activateDomain();
-            document.getElementById('skill-teleport').onclick = () => teleport();
-            document.getElementById('skill-melee').onclick = () => castMelee();
         }
 
         function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
@@ -291,6 +293,7 @@
             setTimeout(callback, 800);
         }
 
+        // --- 建立高解析度城市與碰撞實體 ---
         function buildCity() {
             ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x0e0e13, roughness: 0.7, metalness: 0.05 }));
             ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
@@ -355,14 +358,15 @@
             shijimaDome2 = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0x1d0130, transparent: true, opacity: 0.2, side: THREE.BackSide })); shijimaDome2.position.set(0, -10, 0); shijimaDome2.scale.setScalar(0.98); scene.add(shijimaDome2);
         }
 
+        // --- 全局背景隱藏 (用於蓄力或領域) ---
         function toggleCityVisibility(visible) {
             cityElements.forEach(el => {
                 el.visible = visible;
                 if (el.userData && el.userData.outlineLine) el.userData.outlineLine.visible = visible;
                 if (el.userData && el.userData.slime) el.userData.slime.visible = visible;
             });
-            if(shijimaDome) shijimaDome.material.opacity = visible ? 0.45 : 0.8;
-            if(shijimaDome2) shijimaDome2.material.opacity = visible ? 0.2 : 0.6;
+            if(shijimaDome) shijimaDome.material.opacity = visible ? 0.45 : 0.0;
+            if(shijimaDome2) shijimaDome2.material.opacity = visible ? 0.2 : 0.0;
         }
 
         function createTrainingDummy() {
@@ -382,54 +386,41 @@
             scene.add(dummyGroup);
         }
 
-        // --- 物理破壞系統：龜裂 (0.3s) -> 碎裂爆發 (0.2s) -> 減速落地 (0.5s) ---
         function spawnCrackAndShatter(pos, colorHex, size, isVertical) {
             if (quality === 'low') return;
 
-            const crackGroup = new THREE.Group();
-            crackGroup.position.copy(pos);
-            
+            const crackGroup = new THREE.Group(); crackGroup.position.copy(pos);
             if (isVertical) { crackGroup.rotation.y = Math.random() * Math.PI; } 
             else { crackGroup.position.y = 0.05; crackGroup.rotation.x = -Math.PI / 2; crackGroup.rotation.z = Math.random() * Math.PI; }
 
             const material = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 1.0 });
-            const points = [];
-            const numCracks = 5 + Math.floor(Math.random() * 5);
+            const points = []; const numCracks = 5 + Math.floor(Math.random() * 5);
             for(let i=0; i<numCracks; i++) {
-                let angle = (i / numCracks) * Math.PI * 2 + (Math.random() - 0.5);
-                let r = size * (0.8 + Math.random() * 0.8);
+                let angle = (i / numCracks) * Math.PI * 2 + (Math.random() - 0.5); let r = size * (0.8 + Math.random() * 0.8);
                 points.push(new THREE.Vector3(0,0,0));
                 let segments = 3; let curX = 0, curY = 0;
                 for(let j=1; j<=segments; j++) {
-                    curX += Math.cos(angle + (Math.random()-0.5)*1.0) * (r/segments);
-                    curY += Math.sin(angle + (Math.random()-0.5)*1.0) * (r/segments);
-                    points.push(new THREE.Vector3(curX, curY, 0));
-                    if(j < segments) points.push(new THREE.Vector3(curX, curY, 0));
+                    curX += Math.cos(angle + (Math.random()-0.5)*1.0) * (r/segments); curY += Math.sin(angle + (Math.random()-0.5)*1.0) * (r/segments);
+                    points.push(new THREE.Vector3(curX, curY, 0)); if(j < segments) points.push(new THREE.Vector3(curX, curY, 0));
                 }
             }
             crackGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), material));
-            scene.add(crackGroup);
-            crackDecals.push({ mesh: crackGroup, life: 0.3, colorHex: colorHex, size: size, pos: pos.clone() });
+            scene.add(crackGroup); crackDecals.push({ mesh: crackGroup, life: 0.3, colorHex: colorHex, size: size, pos: pos.clone() });
         }
 
         function spawnPhysicsDebris(pos, colorHex, count = 15) {
             if (quality === 'low') return;
             if (quality === 'high') count = Math.max(3, Math.floor(count / 3));
-            
             const debrisGeo = new THREE.DodecahedronGeometry(0.2 + Math.random()*0.3); 
             const debrisMat = new THREE.MeshPhysicalMaterial({ color: colorHex, roughness: 0.1, metalness: 0.8, emissive: colorHex, emissiveIntensity: 2.0 });
             for (let i = 0; i < count; i++) {
                 const mesh = new THREE.Mesh(debrisGeo, debrisMat);
                 mesh.position.copy(pos); mesh.position.add(new THREE.Vector3((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5));
                 scene.add(mesh);
-                
-                // 初速度極高，隨後受空氣阻力減速
                 let burstSpeed = 40 + Math.random() * 25;
                 physicsDebris.push({ 
-                    mesh: mesh, 
-                    velocity: new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed), 
-                    gravity: -80.0, // 高重力讓其在 0.5s 內落地
-                    life: 0.7, initialLife: 0.7 
+                    mesh: mesh, velocity: new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed), 
+                    gravity: -80.0, life: 0.7, initialLife: 0.7 
                 });
             }
         }
@@ -467,7 +458,7 @@
         }
 
         function dummyShootAttack() {
-            if (domainState.active) return; 
+            if (domainState.active || skillCharge.active) return; 
             const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
             let startPos = new THREE.Vector3().copy(dummyGroup.position); startPos.y += 1.5; mesh.position.copy(startPos);
             let targetPos = new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z);
@@ -507,7 +498,6 @@
             impactFlashes.push({ group: group, light: light, meshes: [core, halo], life: 0.15 });
         }
 
-        // --- 碰撞檢測與物理觸發 ---
         function checkBuildingHits(impactPos, radius, dir, skillType) {
             for (let i = 0; i < cityElements.length; i++) {
                 const el = cityElements[i];
@@ -551,8 +541,10 @@
                 
                 if (playerGroup.position.distanceTo(dummyPhysics.position) < 3.5) {
                     dummyPhysics.velX = dir.z * 25; dummyPhysics.velZ = -dir.x * 25; screenShake = 1.5; 
-                    spawnCrackAndShatter(hitPos, 0x8a5a36, 1.5, false); // 假人碎屑
+                    spawnCrackAndShatter(hitPos, 0x8a5a36, 1.5, false);
                     createImpactFlash(hitPos, 0x00aaff); createShockwave(hitPos, 0xddffff, 10); 
+                } else {
+                    spawnCrackAndShatter(hitPos, 0x333344, 2.0, false);
                 }
                 checkBuildingHits(hitPos, 2.5, dir, 'melee');
             }
@@ -777,7 +769,7 @@
                 const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '0.8'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
                 scene.remove(domainState.group); domainState.active = false; domainFreeze = false;
                 scene.background = new THREE.Color(0x0a0f1a); scene.fog.color = new THREE.Color(0x0a0f1a);
-                cityElements.forEach(b => { if(b.material && b.material.color) { if(b.geometry && b.geometry.type === 'BoxGeometry') b.material.color.setHex(0x13131c); else b.material.color.setHex(0x00aaff); } }); 
+                toggleCityVisibility(true);
                 document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟 - 澀谷事變"; updateStatus("無下限常駐中");
             }
         }
@@ -785,11 +777,14 @@
         // --- 主迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
+            
+            let rawDelta = clock.getDelta();
+            if (rawDelta > 0.05) rawDelta = 0.05; // 核心修復：防止長時間切換分頁導致的物理數值爆炸
+            
             if (!gameStarted) {
                 camera.position.x = Math.sin(clock.getElapsedTime() * 0.4) * 35; camera.position.z = Math.cos(clock.getElapsedTime() * 0.4) * 35; camera.position.y = 18; camera.lookAt(0, 5, 0); renderer.render(scene, camera); return;
             }
             
-            const rawDelta = clock.getDelta();
             if (timeScale < 1.0) { timeScale += rawDelta * 0.5; if (timeScale > 1.0) timeScale = 1.0; }
             const delta = rawDelta * timeScale;
             const time = clock.getElapsedTime();
@@ -798,7 +793,7 @@
                 if (cooldowns[key] > 0) { cooldowns[key] -= rawDelta; if (cooldowns[key] <= 0) cooldowns[key] = 0; updateCooldownUI(key, cooldowns[key], cdMax[key]); }
             });
 
-            // 1. 玩家物理碰撞移動 (WASD 隨視角方向移動)
+            // 1. 玩家物理碰撞移動
             if (!domainState.active || domainState.timer < 0.5) {
                 const speed = 24 * delta; 
                 let dx = 0, dz = 0;
@@ -919,7 +914,6 @@
                 }
             }
 
-            // 物理系統更新：龜裂 -> 粉碎 -> 飛散落地
             for (let i = crackDecals.length - 1; i >= 0; i--) {
                 let c = crackDecals[i]; c.life -= delta;
                 c.mesh.scale.setScalar(1 + (0.3 - c.life) * 2);
@@ -932,33 +926,30 @@
             if (!domainFreeze) {
                 for (let i = physicsDebris.length - 1; i >= 0; i--) {
                     const deb = physicsDebris[i]; deb.life -= delta; 
-                    if (deb.initialLife - deb.life > 0.2) { deb.velocity.x *= 0.85; deb.velocity.z *= 0.85; }
-                    deb.velocity.y += deb.gravity * delta; deb.mesh.position.addScaledVector(deb.velocity, delta);
-                    
-                    if (deb.mesh.position.y < 0.15) { 
-                        deb.mesh.position.y = 0.15; deb.velocity.y = -deb.velocity.y * 0.3; deb.velocity.x *= 0.5; deb.velocity.z *= 0.5; 
-                    }
+                    const easeProgress = deb.life / deb.initialLife; deb.velocity.y += deb.gravity * delta;
+                    deb.mesh.position.addScaledVector(deb.velocity, delta * Math.max(0.2, easeProgress));
+                    if (deb.mesh.position.y < 0.15) { deb.mesh.position.y = 0.15; deb.velocity.y = -deb.velocity.y * 0.45; deb.velocity.x *= 0.55; deb.velocity.z *= 0.55; }
                     deb.mesh.rotation.x += deb.velocity.y * 0.1 * delta; deb.mesh.rotation.y += deb.velocity.x * 0.1 * delta;
-                    
-                    if (deb.mesh.material) { deb.mesh.material.emissiveIntensity = (deb.life / 0.7) * 2.0; deb.mesh.material.opacity = deb.life / 0.7; deb.mesh.material.transparent = true; }
+                    if (deb.mesh.material) deb.mesh.material.opacity = easeProgress;
                     if (deb.life <= 0) { scene.remove(deb.mesh); physicsDebris.splice(i, 1); }
                 }
             }
 
-            // 8. 招式蓄力系統與背景隱藏
             if (skillCharge.active) {
                 skillCharge.time += delta;
                 
                 if (skillCharge.type === 'purple') {
-                    skillCharge.blueOrb.position.y = 1.5 + Math.sin(time * 10) * 0.2; skillCharge.redOrb.position.y = 1.5 + Math.cos(time * 10) * 0.2;
-                    skillCharge.blueOrb.children.forEach(child => { if (child.geometry && child.geometry.type === 'TorusGeometry') { child.rotation.x += 10 * delta; child.rotation.y += 10 * delta; } });
-                    screenShake = skillCharge.time * 0.8; 
-                    if (Math.random() < 0.4) { let bPos = new THREE.Vector3(); skillCharge.blueOrb.getWorldPosition(bPos); createParticles(bPos, 0x00aaff, 2); createImplosionParticles(bPos, 10, 0x00ffff, 3); }
-                    if (Math.random() < 0.4) { let rPos = new THREE.Vector3(); skillCharge.redOrb.getWorldPosition(rPos); createParticles(rPos, 0xff0055, 2); createImplosionParticles(rPos, 10, 0xff0000, 3); }
+                    if(skillCharge.blueOrb && skillCharge.redOrb) {
+                        skillCharge.blueOrb.position.y = 1.5 + Math.sin(time * 10) * 0.2; skillCharge.redOrb.position.y = 1.5 + Math.cos(time * 10) * 0.2;
+                        skillCharge.blueOrb.children.forEach(child => { if (child.geometry && child.geometry.type === 'TorusGeometry') { child.rotation.x += 10 * delta; child.rotation.y += 10 * delta; } });
+                        screenShake = skillCharge.time * 0.8; 
+                        if (Math.random() < 0.4) { let bPos = new THREE.Vector3(); skillCharge.blueOrb.getWorldPosition(bPos); createParticles(bPos, 0x00aaff, 2); createImplosionParticles(bPos, 10, 0x00ffff, 3); }
+                        if (Math.random() < 0.4) { let rPos = new THREE.Vector3(); skillCharge.redOrb.getWorldPosition(rPos); createParticles(rPos, 0xff0055, 2); createImplosionParticles(rPos, 10, 0xff0000, 3); }
 
-                    if (skillCharge.time > 0.6 && skillCharge.time < 1.2) {
-                        skillCharge.blueOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta); skillCharge.redOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta);
-                        createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x02000a, 5); 
+                        if (skillCharge.time > 0.6 && skillCharge.time < 1.2) {
+                            skillCharge.blueOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta); skillCharge.redOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta);
+                            createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x02000a, 5); 
+                        }
                     }
                 } else {
                     screenShake = skillCharge.time * 2.0;
@@ -969,7 +960,8 @@
                     toggleCityVisibility(true); 
                     
                     if (skillCharge.type === 'purple') {
-                        playerGroup.remove(skillCharge.blueOrb); playerGroup.remove(skillCharge.redOrb);
+                        if(skillCharge.blueOrb) playerGroup.remove(skillCharge.blueOrb); 
+                        if(skillCharge.redOrb) playerGroup.remove(skillCharge.redOrb);
                         let fusionPos = new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld);
                         createParticles(fusionPos, 0xaa00ff, 100); createParticles(fusionPos, 0x02000a, 50);  
                         timeScale = 0.1; screenShake = 3.5; spawnActualProjectile('purple_fire'); 
@@ -1104,6 +1096,9 @@
 
             renderer.render(scene, camera);
         }
+        
+        init();
+        animate();
     </script>
 </body>
 </html>
