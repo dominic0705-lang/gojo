@@ -3,31 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>咒術迴戰：澀谷事變 - 無量空處極致版</title>
+    <title>咒術迴戰：死滅迴游 - 東京第一結界</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #020205;
+            overflow: hidden; background-color: #010101;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white; user-select: none;
         }
         #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* UI 介面設計 */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; transition: opacity 0.5s; }
         .panel {
-            background: rgba(5, 5, 15, 0.85); border: 1px solid rgba(138, 43, 226, 0.4);
+            background: rgba(5, 2, 10, 0.85); border: 1px solid rgba(170, 50, 255, 0.3);
             border-radius: 8px; padding: 15px; backdrop-filter: blur(8px);
-            box-shadow: 0 0 20px rgba(138, 43, 226, 0.2); transition: all 0.5s;
+            box-shadow: 0 0 15px rgba(170, 50, 255, 0.1); transition: all 0.5s;
         }
         #top-left { position: absolute; top: 20px; left: 20px; display: none; }
         
         #gear-btn {
             position: absolute; top: 20px; right: 20px; font-size: 28px; cursor: pointer;
-            pointer-events: auto; text-shadow: 0 0 10px #aa00ff; display: none;
+            pointer-events: auto; text-shadow: 0 0 10px #aa33ff; display: none;
             transition: transform 0.3s ease;
         }
         #gear-btn:hover { transform: rotate(90deg) scale(1.1); }
+        
+        #restore-btn {
+            position: absolute; top: 20px; right: 65px; font-size: 28px; cursor: pointer;
+            pointer-events: auto; text-shadow: 0 0 10px #00ffcc; display: none;
+            transition: transform 0.3s ease;
+        }
+        #restore-btn:hover { transform: rotate(-90deg) scale(1.1); }
         
         #settings-modal {
             position: absolute; top: 60px; right: 20px; pointer-events: auto;
@@ -37,11 +43,10 @@
 
         #bottom-center { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; display: none; }
         
-        h1 { margin: 0 0 5px 0; font-size: 22px; color: #fff; text-shadow: 0 0 15px #00ffff; letter-spacing: 2px; }
-        p { margin: 5px 0; font-size: 14px; color: #ddd; }
-        .highlight { color: #00ffff; font-weight: bold; text-shadow: 0 0 8px #00ffff; }
+        h1 { margin: 0 0 5px 0; font-size: 22px; color: #fff; text-shadow: 0 0 15px #aa33ff; letter-spacing: 2px; }
+        p { margin: 5px 0; font-size: 14px; color: #aaa; }
+        .highlight { color: #cc66ff; font-weight: bold; text-shadow: 0 0 8px #aa33ff; }
         
-        /* 技能大字宣告特效 */
         #skill-announce {
             position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%) scale(0.5);
             font-size: 45px; font-weight: 900; color: #fff; letter-spacing: 12px;
@@ -51,55 +56,50 @@
         }
         #skill-announce.show { transform: translateX(-50%) scale(1); opacity: 1; }
 
-        /* 技能按鈕與 CD 遮罩 */
         .skill-box {
-            position: relative; width: 65px; height: 65px; background: rgba(0, 0, 10, 0.6);
-            border: 2px solid #333; border-radius: 10px; display: flex; flex-direction: column;
+            position: relative; width: 65px; height: 65px; background: rgba(5, 0, 10, 0.7);
+            border: 2px solid #324; border-radius: 10px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; font-size: 13px; font-weight: bold;
-            transition: all 0.2s; color: #aaa; overflow: hidden; pointer-events: auto; cursor: pointer;
+            transition: all 0.2s; color: #888; overflow: hidden; pointer-events: auto; cursor: pointer;
         }
         .skill-box.active {
-            border-color: #00ffff; color: #fff; background: rgba(0, 50, 100, 0.8);
-            box-shadow: 0 0 25px rgba(0, 255, 255, 0.9); transform: translateY(-10px) scale(1.1);
+            border-color: #aa55ff; color: #fff; background: rgba(50, 0, 100, 0.8);
+            box-shadow: 0 0 25px rgba(170, 80, 255, 0.9); transform: translateY(-10px) scale(1.1);
         }
-        .skill-box.on-cd { border-color: #555; color: #555; pointer-events: none; }
-        .skill-key { color: #00ffff; font-size: 14px; margin-bottom: 4px; background: rgba(0, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; z-index: 2; }
+        .skill-box.on-cd { border-color: #222; color: #444; pointer-events: none; }
+        .skill-key { color: #cc88ff; font-size: 14px; margin-bottom: 4px; background: rgba(170, 50, 255, 0.2); padding: 2px 6px; border-radius: 4px; z-index: 2; }
         .skill-name { z-index: 2; text-align: center; }
         
         .cd-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: rgba(0, 0, 0, 0.8); z-index: 1; transition: height 0.1s linear; }
         .cd-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: bold; color: #ff3333; z-index: 3; display: none; text-shadow: 0 0 5px #000; }
 
-        select { background: #0a0a1a; color: #00ffff; border: 1px solid #aa00ff; padding: 6px; border-radius: 4px; outline: none; cursor: pointer; font-size: 13px; }
+        select { background: #0a0512; color: #aa55ff; border: 1px solid #aa55ff; padding: 6px; border-radius: 4px; outline: none; cursor: pointer; font-size: 13px; }
         
         #domain-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; opacity: 0; transition: opacity 0.1s; pointer-events: none; z-index: 5; mix-blend-mode: overlay; }
 
         .domain-ui-mode .panel { background: rgba(0, 5, 20, 0.2); border-color: rgba(170, 0, 255, 0.5); box-shadow: 0 0 30px rgba(170, 0, 255, 0.2); }
         .domain-ui-mode h1 { color: #ddddff; text-shadow: 0 0 15px #aa00ff; letter-spacing: 5px; }
-        .domain-ui-mode .highlight { color: #aa00ff; text-shadow: 0 0 10px #aa00ff; }
-        .domain-ui-mode .skill-box { border-color: #50a; background: rgba(10, 0, 20, 0.8); }
 
         #intro-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(2, 2, 5, 0.95); z-index: 50; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; pointer-events: auto; backdrop-filter: blur(8px);
+            background: rgba(5, 2, 8, 0.95); z-index: 50; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: auto; backdrop-filter: blur(10px);
         }
-        .intro-title { font-size: 48px; color: #fff; text-shadow: 0 0 20px #8a2be2, 0 0 40px #aa00ff; letter-spacing: 5px; margin-bottom: 30px; text-align: center; }
-        .intro-desc { color: #aaa; font-size: 16px; max-width: 650px; text-align: center; line-height: 1.8; margin-bottom: 40px; }
+        .intro-title { font-size: 52px; color: #fff; text-shadow: 0 0 20px #8800ff, 0 0 40px #aa00ff; letter-spacing: 8px; margin-bottom: 20px; text-align: center; }
+        .intro-subtitle { font-size: 24px; color: #cc66ff; margin-bottom: 30px; letter-spacing: 4px; }
+        .intro-desc { color: #999; font-size: 16px; max-width: 650px; text-align: center; line-height: 1.8; margin-bottom: 40px; border-left: 3px solid #aa00ff; padding-left: 15px; }
         
         #start-btn {
-            padding: 15px 40px; font-size: 24px; font-weight: bold; color: #fff;
-            background: #8a2be2; border: none; border-radius: 4px; cursor: pointer;
-            box-shadow: 0 0 20px rgba(138, 43, 226, 0.8), inset 0 0 10px rgba(255,255,255,0.4);
+            padding: 15px 40px; font-size: 24px; font-weight: bold; color: #000;
+            background: #aa33ff; border: none; border-radius: 4px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(170, 50, 255, 0.6), inset 0 0 10px rgba(255,255,255,0.4);
             transition: all 0.2s; position: relative;
         }
-        #start-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(138, 43, 226, 1), inset 0 0 15px rgba(255,255,255,0.6); }
+        #start-btn:hover { transform: scale(1.05); box-shadow: 0 0 35px rgba(170, 50, 255, 1), inset 0 0 15px rgba(255,255,255,0.8); }
 
         .shard { position: absolute; pointer-events: none; box-shadow: 0 0 15px var(--glow-color), inset 0 0 10px rgba(255,255,255,0.8); animation: shatterAnim 0.8s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; z-index: 51; }
 
-        @keyframes shatterAnim {
-            0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; filter: brightness(2); }
-            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.2); opacity: 0; filter: brightness(1); }
-        }
+        @keyframes shatterAnim { 0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; filter: brightness(2); } 100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.2); opacity: 0; filter: brightness(1); } }
         @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -110,31 +110,33 @@
     <div id="domain-overlay"></div>
 
     <div id="intro-screen">
-        <div class="intro-title">澀谷事變 · 無下限領域</div>
+        <div class="intro-title">死滅迴游</div>
+        <div class="intro-subtitle">東京第一結界</div>
         <div class="intro-desc">
-            五條悟的最強模擬器。<br>
-            擁有擬真物理引擎、無下限重力透鏡與全招式動態運鏡。<br>
-            前方的特級咒靈訓練假人已準備就緒，摧毀它吧。
+            結界內的空間已被封鎖，整齊的現代都會化為空無一人的死城。<br>
+            十字路口的號誌依舊閃爍，但空氣中瀰漫著詭異的平靜。<br>
+            少量戰鬥痕跡暗示著獵殺已經開始，請做好戰鬥準備。
         </div>
-        <button id="start-btn">展開領域 (開始)</button>
+        <button id="start-btn">進入結界</button>
     </div>
 
     <div id="ui-layer">
         <div id="skill-announce">術式順轉「蒼」</div>
 
         <div id="top-left" class="panel">
-            <h1 id="title-text">五條 悟 - 澀谷事變</h1>
-            <p>狀態: <span id="status-text" class="highlight">無下限常駐中</span></p>
+            <h1 id="title-text">五條 悟</h1>
+            <p>地點: <span class="highlight">東京第一結界</span></p>
             <p>移動: W A S D | 瞄準: 滑鼠移動</p>
-            <p>視角: <span style="color:#00ffff; font-weight:bold;">按住 右鍵 拖曳</span> | <span style="color:#00ffff; font-weight:bold;">滾輪 縮放</span></p>
+            <p>視角: <span style="color:#cc88ff; font-weight:bold;">按住 右鍵 拖曳</span> | 互動: <span style="color:#00ffcc; font-weight:bold;">按 R 修復建築</span></p>
         </div>
 
+        <div id="restore-btn" title="修復場景 (按 R)">🔄</div>
         <div id="gear-btn" title="遊戲設定">⚙️</div>
         <div id="settings-modal" class="panel">
             <label style="font-size: 12px; color:#aaa;">空間透鏡與物理</label>
             <select id="quality">
-                <option value="ultra" selected>極致 (折射透鏡 + 窗戶光影)</option>
-                <option value="high">流暢 (標準光暈 + 精簡特效)</option>
+                <option value="ultra" selected>極致 (折射透鏡 + 光影)</option>
+                <option value="high">流暢 (標準光暈)</option>
             </select>
             
             <label style="font-size: 12px; color:#aaa; margin-top:5px;">招式運鏡系統</label>
@@ -143,7 +145,7 @@
                 <option value="off">關閉 (固定視角)</option>
             </select>
 
-            <label style="font-size: 12px; color:#aaa; margin-top:5px;">技能冷卻 (CD) 系統</label>
+            <label style="font-size: 12px; color:#aaa; margin-top:5px;">技能冷卻 (CD)</label>
             <select id="cd-toggle">
                 <option value="on" selected>開啟 (正常節奏)</option>
                 <option value="off">關閉 (無限火力！)</option>
@@ -162,17 +164,13 @@
 
     <script>
         // --- 全域變數宣告 ---
-        let gameStarted = false;
-        let isSettingsOpen = false;
-        let isCDEnabled = true;
-
+        let gameStarted = false; let isSettingsOpen = false; let isCDEnabled = true;
         let scene, camera, renderer, clock = new THREE.Clock();
-        
         let playerGroup, leftArmGroup, rightArmGroup, leftLegGroup, rightLegGroup, limitlessBarrier;
-        let projectiles = [], particles = [], physicsDebris = [], shockwaves = [], barrierRipples = [], enemyProjectiles = [], cityElements = [], ground;
-        
-        let spatialGlitches = [], afterimages = [], impactFlashes = []; 
-        let crackDecals = []; 
+        let projectiles = [], particles = [], physicsDebris = [], shockwaves = [], barrierRipples = [], enemyProjectiles = [];
+        let cityElements = [], ground, interactableSurfaces = [];
+        let spatialGlitches = [], afterimages = [], impactFlashes = []; let crackDecals = []; 
+        let flickeringSigns = [], cursedResiduals = [], streetLights = []; let barrierWall = null, barrierGrid = null;
         
         let dummyGroup, dummyTorso, dummyHead;
         let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
@@ -186,7 +184,7 @@
         
         let quality = 'ultra';
         let cameraMode = 3; let cameraDistance = 25; let smoothCameraLookAt = new THREE.Vector3(); 
-        let isRightMouseDown = false; let cameraOrbitAngle = 0; let cameraPitchAngle = Math.PI / 4; 
+        let isRightMouseDown = false; let cameraOrbitAngle = 0; let cameraPitchAngle = Math.PI / 4.5; 
         
         let isCinematicEnabled = true; let cinematic = { active: false, timer: 0, duration: 0, type: '' };
         
@@ -194,8 +192,6 @@
         
         let skillCharge = { active: false, type: '', time: 0, maxTime: 0, blueOrb: null, redOrb: null };
         let isAttacking = false; let attackType = 0; let attackTimer = 0;
-
-        let shijimaDome = null, shijimaDome2 = null;
 
         const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5 };
         const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0 };
@@ -208,26 +204,23 @@
                 document.getElementById('top-left').style.display = 'block';
                 document.getElementById('bottom-center').style.display = 'flex';
                 document.getElementById('gear-btn').style.display = 'block';
+                document.getElementById('restore-btn').style.display = 'block';
             });
         });
 
         document.getElementById('gear-btn').addEventListener('click', function() {
-            isSettingsOpen = !isSettingsOpen;
-            document.getElementById('settings-modal').style.display = isSettingsOpen ? 'flex' : 'none';
+            isSettingsOpen = !isSettingsOpen; document.getElementById('settings-modal').style.display = isSettingsOpen ? 'flex' : 'none';
         });
 
         document.getElementById('cd-toggle').addEventListener('change', (e) => {
-            isCDEnabled = (e.target.value === 'on');
-            if (!isCDEnabled) Object.keys(cooldowns).forEach(key => cooldowns[key] = 0);
+            isCDEnabled = (e.target.value === 'on'); if (!isCDEnabled) Object.keys(cooldowns).forEach(key => cooldowns[key] = 0);
         });
 
         document.getElementById('quality').addEventListener('change', (e) => { 
             quality = e.target.value; renderer.shadowMap.enabled = (quality === 'ultra'); updateLimitlessBarrierMaterial(); 
         });
 
-        document.getElementById('cinematic-toggle').addEventListener('change', (e) => { 
-            isCinematicEnabled = (e.target.value === 'on'); 
-        });
+        document.getElementById('cinematic-toggle').addEventListener('change', (e) => { isCinematicEnabled = (e.target.value === 'on'); });
 
         document.getElementById('skill-blue').onclick = () => shootProjectile('blue');
         document.getElementById('skill-red').onclick = () => shootProjectile('red');
@@ -235,24 +228,51 @@
         document.getElementById('skill-domain').onclick = () => activateDomain();
         document.getElementById('skill-teleport').onclick = () => teleport();
         document.getElementById('skill-melee').onclick = () => castMelee();
+        document.getElementById('restore-btn').addEventListener('click', restoreCity);
+
+        // --- 場景修復功能 ---
+        function restoreCity() {
+            if (!gameStarted) return;
+            announceSkillText("時間回溯 · 場景修復", "#00ffcc");
+            createShockwave(playerGroup.position, 0x00ffcc, 200);
+            
+            cityElements.forEach(el => {
+                if (el.userData && (el.userData.isCollapsing || el.userData.isRestoring)) {
+                    el.userData.isCollapsing = false;
+                    el.userData.isRestoring = true;
+                    if(el.userData.roofGroup) el.userData.roofGroup.visible = true;
+                }
+            });
+        }
 
         // --- 核心系統函式 ---
         function init() {
             const container = document.getElementById('game-container');
 
-            scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0c16); scene.fog = new THREE.FogExp2(0x0a0c16, 0.012);
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            scene = new THREE.Scene(); 
+            // 稍顯清澈但仍舊寂靜的夜晚藍黑色
+            const fogColor = 0x080a12; 
+            scene.background = new THREE.Color(fogColor); 
+            // 降低霧氣濃度
+            scene.fog = new THREE.FogExp2(fogColor, 0.0025); 
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             container.appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0x1a1a2b, 1.0));
-            const sunLight = new THREE.DirectionalLight(0x405573, 0.7);
-            sunLight.position.set(100, 150, 50); sunLight.castShadow = true;
-            sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048; scene.add(sunLight);
+            // 環境與主光源
+            scene.add(new THREE.AmbientLight(0x4a505a, 1.2));
+            const moonLight = new THREE.DirectionalLight(0x7a8bac, 1.5);
+            moonLight.position.set(150, 250, 100); moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 2048; moonLight.shadow.mapSize.height = 2048; 
+            moonLight.shadow.camera.near = 0.5; moonLight.shadow.camera.far = 600;
+            moonLight.shadow.camera.left = -250; moonLight.shadow.camera.right = 250;
+            moonLight.shadow.camera.top = 250; moonLight.shadow.camera.bottom = -250;
+            scene.add(moonLight);
 
-            buildCity(); createTrainingDummy(); createGojoPlayer();
+            buildGridTokyoColony(); createTrainingDummy(); createGojoPlayer();
 
             window.addEventListener('resize', onWindowResize); 
             document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
@@ -279,7 +299,7 @@
 
         function triggerBrittleShatter(element, callback) {
             const rect = element.getBoundingClientRect(); element.style.visibility = 'hidden'; 
-            const colors = ['#8a2be2', '#00e5ff', '#ffffff', '#aa00ff'];
+            const colors = ['#aa00ff', '#440088', '#ffffff', '#222'];
             for (let i = 0; i < 35; i++) {
                 const shard = document.createElement('div'); shard.className = 'shard';
                 shard.style.clipPath = `polygon(${Math.random()*100}% ${Math.random()*100}%, ${Math.random()*100}% ${Math.random()*100}%, ${Math.random()*100}% ${Math.random()*100}%)`;
@@ -293,87 +313,250 @@
             setTimeout(callback, 800);
         }
 
-        // --- 建立高解析度城市與碰撞實體 ---
-        function buildCity() {
-            ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x0e0e13, roughness: 0.7, metalness: 0.05 }));
-            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-
-            const crosswalkColor = new THREE.MeshStandardMaterial({ color: 0x444855, roughness: 0.8 });
-            const zebraGeo = new THREE.PlaneGeometry(1.5, 12);
-            for (let i = -6; i <= 6; i++) {
-                const zebra = new THREE.Mesh(zebraGeo, crosswalkColor); zebra.rotation.x = -Math.PI / 2; zebra.position.set(i * 3, 0.01, -10); zebra.receiveShadow = true; scene.add(zebra);
-            }
-
-            const winCanvas = document.createElement('canvas'); winCanvas.width = 512; winCanvas.height = 1024;
-            const ctx = winCanvas.getContext('2d'); ctx.fillStyle = '#050510'; ctx.fillRect(0, 0, 512, 1024);
-            for(let y=10; y<1000; y+=25) {
-                for(let x=10; x<500; x+=25) { if(Math.random() > 0.45) { ctx.fillStyle = Math.random() > 0.8 ? '#e2d3af' : (Math.random() > 0.5 ? '#114a5d' : '#300f3a'); ctx.fillRect(x, y, 12, 18); } }
-            }
-            const winTex = new THREE.CanvasTexture(winCanvas); winTex.wrapS = THREE.RepeatWrapping; winTex.wrapT = THREE.RepeatWrapping;
-
-            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-            const buildingColors = [0x151624, 0x111119, 0x0c0c14];
-            
-            for (let i = 0; i < 280; i++) {
-                const w = 8 + Math.random() * 15; const h = 30 + Math.random() * 80; const d = 8 + Math.random() * 15;
-                const neonColor = new THREE.Color().setHSL(0.75 + Math.random()*0.1, 0.8, 0.4); 
-                
-                let posX, posZ; 
-                do { posX = (Math.random() - 0.5) * 290; posZ = (Math.random() - 0.5) * 290; } while (Math.sqrt(posX*posX + posZ*posZ) < 35); 
-
-                const buildingMat = new THREE.MeshStandardMaterial({ color: buildingColors[Math.floor(Math.random()*buildingColors.length)], roughness: 0.6, metalness: 0.4, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.7 });
-                const building = new THREE.Mesh(boxGeo, buildingMat);
-                building.scale.set(w, h, d); building.position.set(posX, h / 2, posZ); 
-                building.castShadow = true; building.receiveShadow = true; 
-                
-                building.userData = { 
-                    isSolid: true, halfW: w/2, halfD: d/2,
-                    initialScaleY: h, currentScaleY: h, initialPosY: h / 2, currentPosY: h / 2,
-                    isCollapsing: false, shakeTimer: 0, glitchIntensity: Math.random() * 0.4 + 0.3
-                };
-                
-                scene.add(building); cityElements.push(building);
-
-                if (Math.random() > 0.25) {
-                    const line = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: neonColor, transparent: true, opacity: 0.35 }));
-                    line.scale.set(w + 0.15, h + 0.15, d + 0.15); line.position.copy(building.position); 
-                    scene.add(line); cityElements.push(line); building.userData.outlineLine = line; 
-                }
-
-                if (Math.random() > 0.65) {
-                    const slime = new THREE.Mesh(new THREE.SphereGeometry(2 + Math.random()*3, 8, 8), new THREE.MeshBasicMaterial({ color: 0x24054a, transparent: true, opacity: 0.7, wireframe: true }));
-                    slime.position.set(posX + (Math.random()-0.5)*w*0.8, Math.random()*h*0.8, posZ + (Math.random()-0.5)*d*0.8);
-                    scene.add(slime); cityElements.push(slime); building.userData.slime = slime;
-                }
-            }
-
-            const wallGeo = new THREE.PlaneGeometry(300, 150); const wallMat = new THREE.MeshBasicMaterial({ color: 0x5a0fa3, transparent: true, opacity: 0.12, wireframe: true, side: THREE.DoubleSide });
-            const wallN = new THREE.Mesh(wallGeo, wallMat); wallN.position.set(0, 75, -150); scene.add(wallN); cityElements.push(wallN);
-            const wallS = new THREE.Mesh(wallGeo, wallMat); wallS.position.set(0, 75, 150); wallS.rotation.y = Math.PI; scene.add(wallS); cityElements.push(wallS);
-            const wallE = new THREE.Mesh(wallGeo, wallMat); wallE.position.set(150, 75, 0); wallE.rotation.y = -Math.PI/2; scene.add(wallE); cityElements.push(wallE);
-            const wallW = new THREE.Mesh(wallGeo, wallMat); wallW.position.set(-150, 75, 0); wallW.rotation.y = Math.PI/2; scene.add(wallW); cityElements.push(wallW);
-
-            const domeGeo = new THREE.SphereGeometry(350, 16, 16, 0, Math.PI*2, 0, Math.PI/2);
-            shijimaDome = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0x0b041c, transparent: true, opacity: 0.45, wireframe: true, side: THREE.BackSide })); shijimaDome.position.set(0, -10, 0); scene.add(shijimaDome);
-            shijimaDome2 = new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ color: 0x1d0130, transparent: true, opacity: 0.2, side: THREE.BackSide })); shijimaDome2.position.set(0, -10, 0); shijimaDome2.scale.setScalar(0.98); scene.add(shijimaDome2);
+        function createSignTexture(text, color, bgColor = '#050505') {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = bgColor; ctx.fillRect(0, 0, 512, 128);
+            ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.strokeRect(5, 5, 502, 118);
+            ctx.fillStyle = color; ctx.font = 'bold 70px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+            const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true; return tex;
         }
 
-        // --- 全局背景隱藏 (用於蓄力或領域) ---
+        function createBuildingTexture(baseColorHex) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = baseColorHex; ctx.fillRect(0, 0, 256, 512);
+            for(let y=10; y<512; y+=30) {
+                for(let x=10; x<256; x+=20) {
+                    if(Math.random() > 0.8) {
+                        ctx.fillStyle = (Math.random() > 0.5) ? '#ddf5ff' : '#ffeebb'; 
+                    } else {
+                        ctx.fillStyle = '#0a0a0c'; 
+                    }
+                    ctx.fillRect(x, y, 12, 20);
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas); 
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createGlowTexture(colorHexStr) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            gradient.addColorStop(0, colorHexStr + 'FF'); gradient.addColorStop(0.5, colorHexStr + '66'); gradient.addColorStop(1, colorHexStr + '00');
+            ctx.fillStyle = gradient; ctx.fillRect(0, 0, 256, 256);
+            const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true; return tex;
+        }
+
+        // --- 建立整齊棋盤狀街區 ---
+        function buildGridTokyoColony() {
+            // 1. 黑紫色巨柱結界 
+            const cylinderGeo = new THREE.CylinderGeometry(450, 450, 800, 64, 1, true);
+            barrierGrid = new THREE.Mesh(cylinderGeo, new THREE.MeshBasicMaterial({ 
+                color: 0x330066, wireframe: true, transparent: true, opacity: 0.15, side: THREE.BackSide, blending: THREE.AdditiveBlending 
+            }));
+            barrierGrid.position.y = 350; scene.add(barrierGrid);
+            barrierWall = new THREE.Mesh(cylinderGeo, new THREE.MeshBasicMaterial({ 
+                color: 0x15002a, transparent: true, opacity: 0.4, side: THREE.BackSide, depthWrite: false 
+            }));
+            barrierWall.position.y = 350; scene.add(barrierWall);
+
+            // 2. 繪製整齊的棋盤狀柏油路
+            const groundSize = 1000;
+            const gCanvas = document.createElement('canvas'); gCanvas.width = 1024; gCanvas.height = 1024;
+            const gCtx = gCanvas.getContext('2d');
+            gCtx.fillStyle = '#18191c'; gCtx.fillRect(0, 0, 1024, 1024); 
+            
+            gCtx.strokeStyle = '#666'; gCtx.lineWidth = 4;
+            gCtx.setLineDash([20, 20]);
+            for(let i=128; i<1024; i+=256) {
+                gCtx.beginPath(); gCtx.moveTo(i, 0); gCtx.lineTo(i, 1024); gCtx.stroke();
+                gCtx.beginPath(); gCtx.moveTo(0, i); gCtx.lineTo(1024, i); gCtx.stroke();
+            }
+            gCtx.setLineDash([]); 
+
+            const groundTex = new THREE.CanvasTexture(gCanvas); 
+            groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping; groundTex.repeat.set(6, 6);
+            ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSize, groundSize), new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.9, metalness: 0.1 }));
+            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+            interactableSurfaces.push(ground);
+
+            // 3. 網格化生成大樓、路燈與車輛
+            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            const neonTexts = ["居酒屋", "ゲーム", "カラオケ", "24h", "パチンコ", "HOTEL", "TOKYO", "薬", "🍜", "VOID"];
+            const neonColors = ['#ff0033', '#00ffcc', '#aa00ff', '#ffcc00', '#0088ff'];
+            const cursedColors = ['#66ff00', '#cc00ff', '#00ffff', '#ff00aa'];
+
+            const blockSize = 40;     
+            const roadWidth = 20;     
+            const gridSize = blockSize + roadWidth; 
+            const gridCount = 6;      
+            
+            const buildingMats = [
+                new THREE.MeshStandardMaterial({ map: createBuildingTexture('#1a1c25'), roughness: 0.7, metalness: 0.2 }),
+                new THREE.MeshStandardMaterial({ map: createBuildingTexture('#222530'), roughness: 0.7, metalness: 0.3 }),
+                new THREE.MeshStandardMaterial({ map: createBuildingTexture('#121215'), roughness: 0.8, metalness: 0.1 }),
+                new THREE.MeshStandardMaterial({ color: 0x2a2a32, roughness: 0.9, metalness: 0.1 }) 
+            ];
+
+            for (let ix = -gridCount; ix <= gridCount; ix++) {
+                for (let iz = -gridCount; iz <= gridCount; iz++) {
+                    const cx = ix * gridSize; const cz = iz * gridSize;
+                    
+                    if (ix === 0 && iz === 0) continue;
+                    if (Math.hypot(cx, cz) > 400) continue;
+
+                    const buildType = Math.random();
+                    let bData = [];
+                    if (buildType > 0.6) {
+                        bData.push({ x: cx, z: cz, w: 32 + Math.random()*4, d: 32 + Math.random()*4, h: 80 + Math.random()*120, isTall: true });
+                    } else {
+                        bData.push({ x: cx - 10, z: cz - 10, w: 16, d: 16, h: 20 + Math.random()*40, isTall: false });
+                        bData.push({ x: cx + 10, z: cz - 10, w: 16, d: 16, h: 20 + Math.random()*40, isTall: false });
+                        bData.push({ x: cx - 10, z: cz + 10, w: 16, d: 16, h: 20 + Math.random()*40, isTall: false });
+                        bData.push({ x: cx + 10, z: cz + 10, w: 16, d: 16, h: 20 + Math.random()*40, isTall: false });
+                    }
+
+                    bData.forEach(b => {
+                        const mat = buildingMats[Math.floor(Math.random()*buildingMats.length)].clone();
+                        if (mat.map) { mat.map.repeat.set(b.w/10, b.h/15); } 
+
+                        const building = new THREE.Mesh(boxGeo, mat);
+                        building.scale.set(b.w, b.h, b.d); building.position.set(b.x, b.h/2, b.z);
+                        building.castShadow = true; building.receiveShadow = true; 
+                        building.userData = { 
+                            isSolid: true, isBuilding: true, halfW: b.w/2, halfD: b.d/2, height: b.h, 
+                            initialScaleY: b.h, currentScaleY: b.h, initialPosY: b.h/2, currentPosY: b.h/2, isCollapsing: false, shakeTimer: 0
+                        };
+                        scene.add(building); cityElements.push(building); interactableSurfaces.push(building);
+
+                        const isDamaged = Math.random() > 0.9;
+
+                        if (b.isTall) {
+                            const roofGroup = new THREE.Group(); roofGroup.position.set(b.x, b.h, b.z);
+                            for(let p=0; p<4; p++) {
+                                const pillar = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({color: 0x222, roughness: 1.0}));
+                                pillar.scale.set(1.5, 3, 1.5);
+                                pillar.position.set((Math.random()-0.5)*(b.w-4), 1.5, (Math.random()-0.5)*(b.d-4));
+                                if (isDamaged) { pillar.rotation.z = Math.random()*0.5; }
+                                roofGroup.add(pillar);
+                            }
+                            scene.add(roofGroup); building.userData.roofGroup = roofGroup; cityElements.push(roofGroup);
+                        }
+
+                        if (isDamaged) {
+                            const hole = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color: 0x010101}));
+                            hole.scale.set(b.w + 0.5, b.h * 0.15, b.d * 0.8);
+                            hole.position.set(b.x, b.h * (0.3 + Math.random()*0.5), b.z + (Math.random()>0.5? b.d*0.1 : -b.d*0.1));
+                            scene.add(hole); cityElements.push(hole); building.userData.hole = hole;
+                        }
+
+                        if (!b.isTall && Math.random() > 0.4) {
+                            const text = neonTexts[Math.floor(Math.random()*neonTexts.length)];
+                            const color = neonColors[Math.floor(Math.random()*neonColors.length)];
+                            const signMat = new THREE.MeshStandardMaterial({ map: createSignTexture(text, color), emissive: new THREE.Color(color), emissiveIntensity: 1.0, roughness: 0.5 });
+                            const sign = new THREE.Mesh(new THREE.PlaneGeometry(b.w*0.7, 3), signMat);
+                            
+                            const face = Math.floor(Math.random()*4);
+                            if(face===0) { sign.position.set(b.x, b.h*0.7, b.z+b.d/2+0.1); }
+                            else if(face===1) { sign.position.set(b.x, b.h*0.7, b.z-b.d/2-0.1); sign.rotation.y = Math.PI; }
+                            else if(face===2) { sign.position.set(b.x+b.w/2+0.1, b.h*0.7, b.z); sign.rotation.y = Math.PI/2; }
+                            else { sign.position.set(b.x-b.w/2-0.1, b.h*0.7, b.z); sign.rotation.y = -Math.PI/2; }
+                            
+                            scene.add(sign); flickeringSigns.push({ mesh: sign, baseIntensity: 1.0, glitchRate: isDamaged ? 0.2 : 0.02 });
+                        }
+                    });
+
+                    // 避免著色器錯誤 (MAX_FRAGMENT_UNIFORM_VECTORS)：使用假光源(發光平面)取代耗費效能的 PointLight
+                    const slGeo = new THREE.CylinderGeometry(0.15, 0.2, 12, 8);
+                    const slMat = new THREE.MeshStandardMaterial({color: 0x222, roughness: 0.8});
+                    const headGeo = new THREE.BoxGeometry(0.5, 0.3, 2.0);
+                    
+                    const lightPositions = [
+                        {x: cx - blockSize/2, z: cz - blockSize/2 - 2, rot: 0},
+                        {x: cx + blockSize/2, z: cz - blockSize/2 - 2, rot: 0},
+                        {x: cx - blockSize/2 - 2, z: cz + blockSize/2, rot: Math.PI/2},
+                        {x: cx - blockSize/2 - 2, z: cz - blockSize/2, rot: Math.PI/2}
+                    ];
+
+                    lightPositions.forEach(lp => {
+                        const pole = new THREE.Mesh(slGeo, slMat); pole.position.set(lp.x, 6, lp.z);
+                        
+                        const isLightDamaged = Math.random() > 0.9;
+                        if (isLightDamaged) { pole.rotation.z = (Math.random()-0.5)*0.3; pole.rotation.x = (Math.random()-0.5)*0.3; }
+
+                        const head = new THREE.Mesh(headGeo, slMat); head.position.set(0, 5.8, 1); head.rotation.y = lp.rot; pole.add(head);
+
+                        if (Math.random() > 0.15) { // 85% 路燈正常運作
+                            const cHexStr = Math.random() > 0.5 ? '#ffeebb' : '#ddffff';
+                            
+                            // 燈泡材質
+                            const bulbMat = new THREE.MeshBasicMaterial({color: cHexStr, transparent: true, opacity: 1.0});
+                            const bulb = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.5), bulbMat);
+                            bulb.rotation.x = Math.PI/2; bulb.position.set(0, -0.16, 0); head.add(bulb);
+                            
+                            // 用 AdditiveBlending 平面模擬照在地上的光暈，取代真實的 PointLight 以大幅節省效能
+                            const fakeLightPool = new THREE.Mesh(
+                                new THREE.PlaneGeometry(16, 16),
+                                new THREE.MeshBasicMaterial({ map: createGlowTexture(cHexStr), transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
+                            );
+                            fakeLightPool.rotation.x = -Math.PI/2;
+                            fakeLightPool.position.set(lp.x, 0.15, lp.z);
+                            if (!isLightDamaged) scene.add(fakeLightPool);
+
+                            streetLights.push({ bulb: bulbMat, pool: fakeLightPool.material, baseIntensity: 1.0, glitchRate: isLightDamaged ? 0.3 : 0.01 });
+                        }
+                        
+                        pole.userData = { isSolid: true, halfW: 0.5, halfD: 0.5, isCollapsing: false };
+                        scene.add(pole); cityElements.push(pole); interactableSurfaces.push(pole);
+                    });
+
+                    if (Math.random() > 0.6) {
+                        const carGrp = new THREE.Group();
+                        const isCrashed = Math.random() > 0.8;
+                        const carColor = isCrashed ? 0x222222 : [0x880000, 0x113366, 0x999999, 0xffffff][Math.floor(Math.random()*4)];
+                        
+                        const body = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({color: carColor, roughness: isCrashed ? 0.9 : 0.3, metalness: 0.5}));
+                        body.scale.set(2, 0.8, 4.5); body.position.y = 0.4; 
+                        const top = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({color: 0x111, roughness: 0.1}));
+                        top.scale.set(1.8, 0.6, 2.5); top.position.set(0, 1.1, -0.2);
+                        carGrp.add(body); carGrp.add(top);
+                        
+                        carGrp.position.set(cx + blockSize/2 + roadWidth/2, 0, cz + blockSize/2 + roadWidth/2); 
+                        carGrp.rotation.y = (Math.random() > 0.5) ? 0 : Math.PI/2;
+                        
+                        if(isCrashed) { carGrp.rotation.y += (Math.random()-0.5); carGrp.position.x += (Math.random()-0.5)*5; }
+                        scene.add(carGrp);
+                    }
+                }
+            }
+
+            for(let i=0; i<15; i++) {
+                const cColor = cursedColors[Math.floor(Math.random()*cursedColors.length)];
+                const residualGeo = new THREE.PlaneGeometry(12, 12);
+                const residualMat = new THREE.MeshBasicMaterial({ map: createGlowTexture(cColor), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+                const residual = new THREE.Mesh(residualGeo, residualMat);
+                residual.rotation.x = -Math.PI/2;
+                residual.position.set((Math.random()-0.5)*300, 0.1, (Math.random()-0.5)*300);
+                scene.add(residual); cursedResiduals.push({ mesh: residual, baseOpacity: 0.3 + Math.random()*0.3, speed: 2 + Math.random()*3 });
+            }
+        }
+
         function toggleCityVisibility(visible) {
-            cityElements.forEach(el => {
-                el.visible = visible;
-                if (el.userData && el.userData.outlineLine) el.userData.outlineLine.visible = visible;
-                if (el.userData && el.userData.slime) el.userData.slime.visible = visible;
-            });
-            if(shijimaDome) shijimaDome.material.opacity = visible ? 0.45 : 0.0;
-            if(shijimaDome2) shijimaDome2.material.opacity = visible ? 0.2 : 0.0;
+            cityElements.forEach(el => { el.visible = visible; }); ground.visible = visible; 
+            if(barrierWall) barrierWall.visible = visible; if(barrierGrid) barrierGrid.visible = visible;
+            flickeringSigns.forEach(s => { s.mesh.visible = visible; }); cursedResiduals.forEach(r => { r.mesh.visible = visible; });
         }
 
         function createTrainingDummy() {
             dummyGroup = new THREE.Group(); dummyGroup.position.copy(dummyPhysics.position);
-            const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.9 }); const ropeMat = new THREE.MeshStandardMaterial({ color: 0xbf9b63, roughness: 1.0 });
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.9 }); const ropeMat = new THREE.MeshStandardMaterial({ color: 0x3a1a1a, roughness: 1.0 });
 
-            const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x222222 })); base.position.y = 0.1; dummyGroup.add(base);
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x050505 })); base.position.y = 0.1; dummyGroup.add(base);
             dummyTorso = new THREE.Group(); dummyTorso.position.y = 0.2; dummyGroup.add(dummyTorso);
             const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 2.5, 8), woodMat); pillar.position.y = 1.25; dummyTorso.add(pillar);
             const strawWrap = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 8), ropeMat); strawWrap.position.y = 1.6; dummyTorso.add(strawWrap);
@@ -388,10 +571,9 @@
 
         function spawnCrackAndShatter(pos, colorHex, size, isVertical) {
             if (quality === 'low') return;
-
             const crackGroup = new THREE.Group(); crackGroup.position.copy(pos);
             if (isVertical) { crackGroup.rotation.y = Math.random() * Math.PI; } 
-            else { crackGroup.position.y = 0.05; crackGroup.rotation.x = -Math.PI / 2; crackGroup.rotation.z = Math.random() * Math.PI; }
+            else { crackGroup.position.y += 0.05; crackGroup.rotation.x = -Math.PI / 2; crackGroup.rotation.z = Math.random() * Math.PI; }
 
             const material = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 1.0 });
             const points = []; const numCracks = 5 + Math.floor(Math.random() * 5);
@@ -409,30 +591,26 @@
         }
 
         function spawnPhysicsDebris(pos, colorHex, count = 15) {
-            if (quality === 'low') return;
-            if (quality === 'high') count = Math.max(3, Math.floor(count / 3));
+            if (quality === 'low') return; if (quality === 'high') count = Math.max(3, Math.floor(count / 3));
             const debrisGeo = new THREE.DodecahedronGeometry(0.2 + Math.random()*0.3); 
-            const debrisMat = new THREE.MeshPhysicalMaterial({ color: colorHex, roughness: 0.1, metalness: 0.8, emissive: colorHex, emissiveIntensity: 2.0 });
+            const debrisMat = new THREE.MeshPhysicalMaterial({ color: colorHex, roughness: 0.2, metalness: 0.5 });
             for (let i = 0; i < count; i++) {
                 const mesh = new THREE.Mesh(debrisGeo, debrisMat);
                 mesh.position.copy(pos); mesh.position.add(new THREE.Vector3((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5));
                 scene.add(mesh);
                 let burstSpeed = 40 + Math.random() * 25;
-                physicsDebris.push({ 
-                    mesh: mesh, velocity: new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed), 
-                    gravity: -80.0, life: 0.7, initialLife: 0.7 
-                });
+                physicsDebris.push({ mesh: mesh, velocity: new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed), gravity: -80.0, life: 0.7, initialLife: 0.7 });
             }
         }
 
         function createGojoPlayer() {
             if (playerGroup) scene.remove(playerGroup);
             playerGroup = new THREE.Group(); playerGroup.position.set(0, 1.8, 0); 
-            const uniformMat = new THREE.MeshStandardMaterial({ color: 0x0c0c16, roughness: 0.8 }); const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe2d2, roughness: 0.4 });
+            const uniformMat = new THREE.MeshStandardMaterial({ color: 0x050608, roughness: 0.8 }); const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe2d2, roughness: 0.4 });
             
             const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.6, 8), uniformMat); torso.position.y = 0.8; playerGroup.add(torso);
             const headGroup = new THREE.Group(); headGroup.position.y = 1.8; headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), skinMat));
-            headGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.15, 16), new THREE.MeshStandardMaterial({color: 0x050505})).translateY(0.05));
+            headGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.15, 16), new THREE.MeshStandardMaterial({color: 0x020202})).translateY(0.05));
             headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 16, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color: 0xffffff})).translateY(0.1));
             playerGroup.add(headGroup);
 
@@ -459,10 +637,10 @@
 
         function dummyShootAttack() {
             if (domainState.active || skillCharge.active) return; 
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff1133 }));
             let startPos = new THREE.Vector3().copy(dummyGroup.position); startPos.y += 1.5; mesh.position.copy(startPos);
             let targetPos = new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z);
-            scene.add(mesh); enemyProjectiles.push({ mesh: mesh, dir: new THREE.Vector3().subVectors(targetPos, startPos).normalize(), speed: 15.0, life: 5.0 });
+            scene.add(mesh); enemyProjectiles.push({ mesh: mesh, dir: new THREE.Vector3().subVectors(targetPos, startPos).normalize(), speed: 18.0, life: 5.0 });
         }
 
         function triggerCinematic(type, duration) {
@@ -503,15 +681,17 @@
                 const el = cityElements[i];
                 if (el.userData && el.userData.isSolid && el.visible && !el.userData.isCollapsing) {
                     const dist = el.position.distanceTo(new THREE.Vector3(impactPos.x, el.position.y, impactPos.z));
-                    if (dist < radius + Math.max(el.userData.halfW, el.userData.halfD) * 1.2) {
+                    if (dist < radius + Math.max(el.userData.halfW || 5, el.userData.halfD || 5) * 1.2) {
                         el.userData.isCollapsing = true; el.userData.shakeTimer = 0.8; 
-                        let debrisColor = 0x13131c; 
-                        if (skillType === 'blue') debrisColor = 0x0055ff; if (skillType === 'red') debrisColor = 0xff0044; if (skillType === 'purple') debrisColor = 0x7700ff;
+                        let debrisColor = 0x222222; 
+                        if (skillType === 'blue') debrisColor = 0x0044aa; if (skillType === 'red') debrisColor = 0xaa0033; if (skillType === 'purple') debrisColor = 0x5500aa;
 
-                        spawnCrackAndShatter(impactPos, debrisColor, skillType === 'purple' ? 10 : 4, true);
+                        spawnCrackAndShatter(impactPos, debrisColor, skillType === 'purple' ? 12 : 5, true);
                         createImpactFlash(impactPos, debrisColor);
-                        let collapseFactor = (skillType === 'purple') ? 0.1 : 0.6; 
-                        el.userData.targetScaleY = el.userData.initialScaleY * collapseFactor; el.userData.targetPosY = el.userData.initialPosY * collapseFactor;
+                        let collapseFactor = (skillType === 'purple') ? 0.2 : 0.7; 
+                        el.userData.targetScaleY = (el.userData.initialScaleY || el.scale.y) * collapseFactor; 
+                        el.userData.targetPosY = (el.userData.initialPosY || el.position.y) * collapseFactor;
+                        if(el.userData.roofGroup) el.userData.roofGroup.visible = false; 
                         screenShake = Math.max(screenShake, skillType === 'purple' ? 4.0 : 1.8);
                     }
                 }
@@ -523,34 +703,32 @@
             if (isCDEnabled) cooldowns.melee = cdMax.melee;
             
             isAttacking = true; attackType = Math.floor(Math.random() * 3); attackTimer = 0.35; 
-            announceSkillText(attackType === 2 ? "破甲踢擊" : "無下限打擊", "#00ffff"); triggerCinematic('melee', 0.4);
+            announceSkillText(attackType === 2 ? "破甲踢擊" : "無下限打擊", "#00ffcc"); triggerCinematic('melee', 0.4);
             
-            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground);
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(interactableSurfaces);
             if(intersects.length > 0) {
                 const startPos = playerGroup.position.clone();
                 const target = intersects[0].point; const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize();
                 
                 const endPos = startPos.clone().add(dir.clone().multiplyScalar(2.0));
-                endPos.x = THREE.MathUtils.clamp(endPos.x, -145, 145); endPos.z = THREE.MathUtils.clamp(endPos.z, -145, 145);
+                endPos.x = THREE.MathUtils.clamp(endPos.x, -390, 390); endPos.z = THREE.MathUtils.clamp(endPos.z, -390, 390);
                 
                 createAfterimage(startPos, playerGroup.rotation.y); createAfterimage(startPos.clone().lerp(endPos, 0.5), playerGroup.rotation.y);
-                playerGroup.position.copy(endPos);
-                const hitPos = new THREE.Vector3(playerGroup.position.x + dir.x * 1.0, 1.5, playerGroup.position.z + dir.z * 1.0);
+                playerGroup.position.x = endPos.x; playerGroup.position.z = endPos.z;
+                const hitPos = new THREE.Vector3(playerGroup.position.x + dir.x * 1.0, playerGroup.position.y + 1.5, playerGroup.position.z + dir.z * 1.0);
                 
-                createSpatialGlitch(hitPos); createParticles(hitPos, 0x00ffff, 15, 8); 
+                createSpatialGlitch(hitPos); createParticles(hitPos, 0x00ffcc, 15, 8); 
                 
                 if (playerGroup.position.distanceTo(dummyPhysics.position) < 3.5) {
                     dummyPhysics.velX = dir.z * 25; dummyPhysics.velZ = -dir.x * 25; screenShake = 1.5; 
-                    spawnCrackAndShatter(hitPos, 0x8a5a36, 1.5, false);
-                    createImpactFlash(hitPos, 0x00aaff); createShockwave(hitPos, 0xddffff, 10); 
+                    spawnCrackAndShatter(hitPos, 0x1a1a20, 1.5, false); createImpactFlash(hitPos, 0x00aaff); createShockwave(hitPos, 0xddffff, 10); 
                 } else {
-                    spawnCrackAndShatter(hitPos, 0x333344, 2.0, false);
+                    spawnCrackAndShatter(hitPos, 0x222222, 2.0, false);
                 }
                 checkBuildingHits(hitPos, 2.5, dir, 'melee');
             }
         }
 
-        // --- 統整招式蓄力系統 ---
         function shootProjectile(type) {
             if (!gameStarted || skillCharge.active) return;
             if (isCDEnabled) { if ((type === 'blue' && cooldowns.blue > 0) || (type === 'red' && cooldowns.red > 0) || (type === 'purple' && cooldowns.purple > 0)) return; }
@@ -561,56 +739,43 @@
 
                 const blueOrb = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
                 const redOrb = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }));
-                createGravitationalRings(blueOrb, 1.2, 0x00ffff); blueOrb.position.set(-2.5, 2.0, 0.5); redOrb.position.set(2.5, 2.0, 0.5);
-                
+                createGravitationalRings(blueOrb, 1.2, 0x00ffcc); blueOrb.position.set(-2.5, 2.0, 0.5); redOrb.position.set(2.5, 2.0, 0.5);
                 if (quality === 'ultra') { blueOrb.add(new THREE.PointLight(0x00aaff, 4, 15)); redOrb.add(new THREE.PointLight(0xff0055, 4, 15)); }
                 playerGroup.add(blueOrb); playerGroup.add(redOrb); 
-                
                 skillCharge = { active: true, time: 0, maxTime: 1.2, type: 'purple', blueOrb: blueOrb, redOrb: redOrb };
-                toggleCityVisibility(false); 
-                return; 
+                toggleCityVisibility(false); return; 
             }
 
             if (type === 'blue') {
                 if (isCDEnabled) cooldowns.blue = cdMax.blue;
                 announceSkillText("術式順轉「蒼」", "#00aaff"); triggerCinematic('blue', 1.0); isAttacking = true; attackType = 5; attackTimer = 0.6;
                 skillCharge = { active: true, time: 0, maxTime: 0.3, type: 'blue' };
-                toggleCityVisibility(false);
-                return;
+                toggleCityVisibility(false); return;
             }
 
             if (type === 'red') {
                 if (isCDEnabled) cooldowns.red = cdMax.red;
                 announceSkillText("術式反轉「赫」", "#ff0033"); triggerCinematic('red', 1.0); isAttacking = true; attackType = 4; attackTimer = 0.5; screenShake = 1.5;
                 skillCharge = { active: true, time: 0, maxTime: 0.3, type: 'red' };
-                toggleCityVisibility(false);
-                return;
+                toggleCityVisibility(false); return;
             }
         }
 
-        // --- 釋放實體光球 ---
         function spawnActualProjectile(type) {
             if (!playerGroup) return; 
-            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground); 
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(interactableSurfaces); 
             let target = intersects.length > 0 ? intersects[0].point : new THREE.Vector3(0, 0, -100).applyMatrix4(camera.matrixWorld);
-            const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize();
+            const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize(); 
 
             const projGroup = new THREE.Group(); projGroup.position.copy(playerGroup.position); projGroup.position.y += 1.0; 
             let color, size, speed, intensity, life;
 
-            if (type === 'blue') {
-                color = 0x0044ff; size = 2.0; speed = 35; intensity = 5; life = 2.5; createGravitationalRings(projGroup, size, 0x00ffff);
-            } else if (type === 'red') {
-                createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5;
-                color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; 
-            } else if (type === 'purple_fire') {
-                color = 0x8800ff; size = 6.0; speed = 35; intensity = 10; life = 4.0; type = 'purple'; 
-                announceSkillText("虛式「茈」", "#aa00ff"); triggerCinematic('purple_fire', 1.5);
-                timeScale = 0.1; screenShake = 3.5;
-            }
+            if (type === 'blue') { color = 0x0044ff; size = 2.0; speed = 35; intensity = 5; life = 2.5; createGravitationalRings(projGroup, size, 0x00ffff); } 
+            else if (type === 'red') { createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5; color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; } 
+            else if (type === 'purple_fire') { color = 0x8800ff; size = 6.0; speed = 35; intensity = 10; life = 4.0; type = 'purple'; announceSkillText("虛式「茈」", "#aa00ff"); triggerCinematic('purple_fire', 1.5); timeScale = 0.1; screenShake = 3.5; }
 
             projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(size, 32, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending })));
-            const coreColor = (type === 'purple') ? 0x02000a : (type === 'blue' ? 0x00ffff : 0xffffff);
+            const coreColor = (type === 'purple') ? 0x010101 : (type === 'blue' ? 0x00ffff : 0xffffff);
             projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(type === 'purple' ? size*0.6 : size*0.4, 16, 16), new THREE.MeshBasicMaterial({color: coreColor})));
 
             if (quality === 'ultra') projGroup.add(new THREE.PointLight(color, intensity, size * 25));
@@ -636,7 +801,7 @@
                 const vel = new THREE.Vector3().subVectors(targetPos, startPos).multiplyScalar(2.5); velocities.push(vel.x, vel.y, vel.z);
             }
             pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.2, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false}));
+            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.5, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false}));
             scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 0.4 }); 
         }
 
@@ -646,11 +811,10 @@
                 positions.push(pos.x, pos.y, pos.z); velocities.push((Math.random() - 0.5) * spreadSpeed, (Math.random() - 0.5) * spreadSpeed, (Math.random() - 0.5) * spreadSpeed);
             }
             pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.5, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false}));
+            const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.8, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false}));
             scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 1.0 });
         }
 
-        function updateStatus(text) { document.getElementById('status-text').innerText = text; }
         function highlightUI(id) { const el = document.getElementById(id); if(el) { el.classList.add('active'); setTimeout(() => el.classList.remove('active'), 250); } }
 
         function onKeyDown(event) {
@@ -662,11 +826,8 @@
             if (k === '4') { highlightUI('skill-domain'); activateDomain(); }
             if (k === '5') { highlightUI('skill-teleport'); teleport(); }
             if (k === 'z') { highlightUI('skill-melee'); castMelee(); }
-            
-            if (k === 'f') {
-                cameraMode = cameraMode === 3 ? 1 : (cameraMode === 1 ? 2 : 3);
-                updateStatus(`視角: ${ {1:"第一人稱", 2:"俯瞰視角", 3:"第三人稱"}[cameraMode] }`);
-            }
+            if (k === 'r') { restoreCity(); }
+            if (k === 'f') { cameraMode = cameraMode === 3 ? 1 : (cameraMode === 1 ? 2 : 3); }
         }
         function onKeyUp(event) { const k = event.key.toLowerCase(); if (keys.hasOwnProperty(k)) keys[k] = false; }
         
@@ -678,27 +839,29 @@
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1; 
         }
         
-        function onMouseWheel(event) { if(!gameStarted) return; cameraDistance += Math.sign(event.deltaY) * 2; cameraDistance = THREE.MathUtils.clamp(cameraDistance, 10, 60); }
+        function onMouseWheel(event) { if(!gameStarted) return; cameraDistance += Math.sign(event.deltaY) * 2; cameraDistance = THREE.MathUtils.clamp(cameraDistance, 10, 80); }
 
         function teleport() {
             if (!gameStarted || (isCDEnabled && cooldowns.teleport > 0) || skillCharge.active) return;
             if (isCDEnabled) cooldowns.teleport = cdMax.teleport;
             
-            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground);
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(interactableSurfaces);
             if(intersects.length > 0) {
                 const startPos = playerGroup.position.clone();
-                const targetPos = new THREE.Vector3(intersects[0].point.x, playerGroup.position.y, intersects[0].point.z);
+                const targetPoint = intersects[0].point;
+                const normal = intersects[0].face ? intersects[0].face.normal : new THREE.Vector3(0,1,0);
+                const targetPos = new THREE.Vector3(targetPoint.x + normal.x*0.5, targetPoint.y, targetPoint.z + normal.z*0.5);
 
                 createAfterimage(startPos, playerGroup.rotation.y);
                 createSpatialGlitch(startPos); createImplosionParticles(startPos, 2.5, 0x0088ff, 6);
 
                 playerGroup.position.copy(targetPos);
-                playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -145, 145);
-                playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -145, 145);
+                playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -390, 390);
+                playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -390, 390);
+                playerGroup.userData.targetY = targetPos.y; 
                 
                 createSpatialGlitch(playerGroup.position); createImplosionParticles(playerGroup.position, 1.5, 0x00ffff, 4);
-
-                triggerFlashCut(); announceSkillText("無下限瞬移", "#ffffff"); triggerCinematic('teleport', 0.2); 
+                triggerFlashCut(); announceSkillText("空間傳送", "#ffffff"); triggerCinematic('teleport', 0.2); 
             }
         }
 
@@ -714,7 +877,7 @@
             
             isAttacking = true; attackType = 6; attackTimer = 1.0; triggerCinematic('domain', 8.0); 
             
-            cityElements.forEach(b => { if(b.material && b.material.color) b.material.color.setHex(0x010101); });
+            cityElements.forEach(b => { if(b.material && b.material.color) b.material.color.setHex(0x000000); });
             scene.fog.color.setHex(0x000000); scene.background.setHex(0x000000);
         }
 
@@ -728,7 +891,7 @@
 
                 const wireMesh1 = new THREE.Mesh(new THREE.IcosahedronGeometry(120, 3), new THREE.MeshBasicMaterial({ color: 0xaa00ff, wireframe: true, transparent: true, opacity: 0.2 }));
                 const wireMesh2 = new THREE.Mesh(new THREE.OctahedronGeometry(140, 2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.15 }));
-                const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 32), new THREE.MeshBasicMaterial({ color: 0x020011, side: THREE.BackSide }));
+                const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 32), new THREE.MeshBasicMaterial({ color: 0x01000a, side: THREE.BackSide }));
                 
                 domainState.group.add(dome); domainState.group.add(wireMesh1); domainState.group.add(wireMesh2);
                 domainState.group.scale.set(0.01, 0.01, 0.01);
@@ -756,50 +919,41 @@
                 
                 if (domainState.infoParticles) {
                     const posArr = domainState.infoParticles.geometry.attributes.position.array;
-                    for (let i = 0; i < posArr.length; i += 3) {
-                        posArr[i+1] -= 20 * delta; if (posArr[i+1] < -100) posArr[i+1] = 100; posArr[i] += Math.sin(time*2 + i)*0.5; 
-                    }
+                    for (let i = 0; i < posArr.length; i += 3) { posArr[i+1] -= 20 * delta; if (posArr[i+1] < -100) posArr[i+1] = 100; posArr[i] += Math.sin(time*2 + i)*0.5; }
                     domainState.infoParticles.geometry.attributes.position.needsUpdate = true;
                 }
-                if (dummyTorso && Math.random() < 0.2) { let dPos = new THREE.Vector3().copy(dummyPhysics.position); dPos.y += Math.random()*2; createParticles(dPos, 0x00ffff, 1, 0.5); }
             }
 
             if (t > 8.0 && domainState.phase === 'climax') {
                 domainState.phase = 'fade';
                 const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '0.8'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
                 scene.remove(domainState.group); domainState.active = false; domainFreeze = false;
-                scene.background = new THREE.Color(0x0a0f1a); scene.fog.color = new THREE.Color(0x0a0f1a);
+                scene.background = new THREE.Color(0x080a12); scene.fog.color = new THREE.Color(0x080a12);
                 toggleCityVisibility(true);
-                document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟 - 澀谷事變"; updateStatus("無下限常駐中");
+                document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟"; 
             }
         }
 
-        // --- 主迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
-            
-            let rawDelta = clock.getDelta();
-            if (rawDelta > 0.05) rawDelta = 0.05; // 核心修復：防止長時間切換分頁導致的物理數值爆炸
+            let rawDelta = clock.getDelta(); if (rawDelta > 0.05) rawDelta = 0.05; 
             
             if (!gameStarted) {
-                camera.position.x = Math.sin(clock.getElapsedTime() * 0.4) * 35; camera.position.z = Math.cos(clock.getElapsedTime() * 0.4) * 35; camera.position.y = 18; camera.lookAt(0, 5, 0); renderer.render(scene, camera); return;
+                camera.position.x = Math.sin(clock.getElapsedTime() * 0.1) * 200; camera.position.z = Math.cos(clock.getElapsedTime() * 0.1) * 200; camera.position.y = 80; camera.lookAt(0, 30, 0); renderer.render(scene, camera); return;
             }
             
             if (timeScale < 1.0) { timeScale += rawDelta * 0.5; if (timeScale > 1.0) timeScale = 1.0; }
-            const delta = rawDelta * timeScale;
-            const time = clock.getElapsedTime();
+            const delta = rawDelta * timeScale; const time = clock.getElapsedTime();
 
             Object.keys(cooldowns).forEach(key => {
                 if (cooldowns[key] > 0) { cooldowns[key] -= rawDelta; if (cooldowns[key] <= 0) cooldowns[key] = 0; updateCooldownUI(key, cooldowns[key], cdMax[key]); }
             });
 
-            // 1. 玩家物理碰撞移動
             if (!domainState.active || domainState.timer < 0.5) {
-                const speed = 24 * delta; 
-                let dx = 0, dz = 0;
-                let inputX = 0, inputZ = 0;
-                if (keys.w) inputZ -= 1; if (keys.s) inputZ += 1;
-                if (keys.a) inputX -= 1; if (keys.d) inputX += 1;
+                const speed = 24 * delta; let dx = 0, dz = 0; let inputX = 0, inputZ = 0;
+                if (keys.w) inputZ -= 1; if (keys.s) inputZ += 1; if (keys.a) inputX -= 1; if (keys.d) inputX += 1;
+
+                let isOnBuilding = false;
 
                 if ((inputX !== 0 || inputZ !== 0) && !skillCharge.active) {
                     let length = Math.sqrt(inputX * inputX + inputZ * inputZ); inputX /= length; inputZ /= length;
@@ -812,44 +966,68 @@
 
                     let dMinX = dummyGroup.position.x - 1.5 - pRad; let dMaxX = dummyGroup.position.x + 1.5 + pRad;
                     let dMinZ = dummyGroup.position.z - 1.5 - pRad; let dMaxZ = dummyGroup.position.z + 1.5 + pRad;
-                    if (newX > dMinX && newX < dMaxX && playerGroup.position.z > dMinZ && playerGroup.position.z < dMaxZ) hitX = true;
-                    if (playerGroup.position.x > dMinX && playerGroup.position.x < dMaxX && newZ > dMinZ && newZ < dMaxZ) hitZ = true;
+                    if (newX > dMinX && newX < dMaxX && playerGroup.position.z > dMinZ && playerGroup.position.z < dMaxZ && playerGroup.position.y < 5) hitX = true;
+                    if (playerGroup.position.x > dMinX && playerGroup.position.x < dMaxX && newZ > dMinZ && newZ < dMaxZ && playerGroup.position.y < 5) hitZ = true;
 
                     for (let el of cityElements) {
-                        if (el.userData && el.userData.isSolid && el.visible && !el.userData.isCollapsing) {
-                            let minX = el.position.x - el.userData.halfW - pRad; let maxX = el.position.x + el.userData.halfW + pRad;
-                            let minZ = el.position.z - el.userData.halfD - pRad; let maxZ = el.position.z + el.userData.halfD + pRad;
+                        if (el.userData && el.userData.isSolid && el.visible && !el.userData.isCollapsing && el.userData.isBuilding) {
+                            let hw = el.userData.halfW || 5; let hd = el.userData.halfD || 5;
+                            let minX = el.position.x - hw - pRad; let maxX = el.position.x + hw + pRad;
+                            let minZ = el.position.z - hd - pRad; let maxZ = el.position.z + hd + pRad;
                             
-                            if (newX > minX && newX < maxX && playerGroup.position.z > minZ && playerGroup.position.z < maxZ) hitX = true;
-                            if (playerGroup.position.x > minX && playerGroup.position.x < maxX && newZ > minZ && newZ < maxZ) hitZ = true;
+                            if (playerGroup.userData.targetY >= el.userData.height) {
+                                if (playerGroup.position.x > minX && playerGroup.position.x < maxX && playerGroup.position.z > minZ && playerGroup.position.z < maxZ) {
+                                    isOnBuilding = true;
+                                }
+                            } else {
+                                if (newX > minX && newX < maxX && playerGroup.position.z > minZ && playerGroup.position.z < maxZ) hitX = true;
+                                if (playerGroup.position.x > minX && playerGroup.position.x < maxX && newZ > minZ && newZ < maxZ) hitZ = true;
+                            }
                         }
                     }
 
-                    if (!hitX) playerGroup.position.x = newX;
-                    if (!hitZ) playerGroup.position.z = newZ;
-
-                    playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -145, 145);
-                    playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -145, 145);
+                    if (!hitX) playerGroup.position.x = newX; if (!hitZ) playerGroup.position.z = newZ;
+                    playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x, -390, 390); playerGroup.position.z = THREE.MathUtils.clamp(playerGroup.position.z, -390, 390);
                 }
 
-                raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObject(ground); let aimPoint = new THREE.Vector3();
+                if (!isOnBuilding && playerGroup.userData.targetY > 0) { playerGroup.userData.targetY = 0; }
+
+                raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(interactableSurfaces); let aimPoint = new THREE.Vector3();
                 if(intersects.length > 0) {
                     aimPoint.copy(intersects[0].point);
-                    if (!isAttacking) {
-                        const targetAngle = Math.atan2(aimPoint.x - playerGroup.position.x, aimPoint.z - playerGroup.position.z);
-                        playerGroup.rotation.y = THREE.MathUtils.lerp(playerGroup.rotation.y, targetAngle, 10 * delta);
-                    }
+                    if (!isAttacking) { const targetAngle = Math.atan2(aimPoint.x - playerGroup.position.x, aimPoint.z - playerGroup.position.z); playerGroup.rotation.y = THREE.MathUtils.lerp(playerGroup.rotation.y, targetAngle, 10 * delta); }
                 }
             }
 
-            playerGroup.position.y = 1.8 + Math.sin(time * 3) * 0.2;
-            if ((keys.w || keys.s || keys.a || keys.d) && Math.random() < 0.25 && !skillCharge.active) {
-                let ripplePos = playerGroup.position.clone(); ripplePos.y = 0.05; spawnBarrierRipple(ripplePos);
+            const baseTargetY = (playerGroup.userData.targetY || 0) + 1.8;
+            playerGroup.position.y = THREE.MathUtils.lerp(playerGroup.position.y, baseTargetY + Math.sin(time * 3) * 0.2, 10 * delta);
+
+            if ((keys.w || keys.s || keys.a || keys.d) && Math.random() < 0.25 && !skillCharge.active && playerGroup.position.y < 3) { 
+                let ripplePos = playerGroup.position.clone(); ripplePos.y = 0.05; spawnBarrierRipple(ripplePos); 
             }
 
-            if (!domainFreeze && !skillCharge.active) {
-                dummyAttackTimer -= delta;
-                if (dummyAttackTimer <= 0) { dummyShootAttack(); dummyAttackTimer = 3.0; }
+            if (!domainFreeze && !skillCharge.active) { dummyAttackTimer -= delta; if (dummyAttackTimer <= 0) { dummyShootAttack(); dummyAttackTimer = 3.0; } }
+
+            if(barrierGrid && !domainState.active) { barrierGrid.rotation.y += 0.01 * delta; }
+            if(barrierWall && !domainState.active) { barrierWall.rotation.y -= 0.005 * delta; }
+
+            if(!domainState.active) {
+                flickeringSigns.forEach(s => {
+                    if(Math.random() < s.glitchRate) { s.mesh.material.emissiveIntensity = Math.random() * 0.2; } 
+                    else { s.mesh.material.emissiveIntensity = THREE.MathUtils.lerp(s.mesh.material.emissiveIntensity, s.baseIntensity + Math.sin(time*5)*0.2, 10*delta); }
+                });
+                cursedResiduals.forEach(r => {
+                    r.mesh.material.opacity = r.baseOpacity + Math.sin(time * r.speed) * 0.3;
+                });
+                
+                streetLights.forEach(sl => {
+                    if (Math.random() < sl.glitchRate) { 
+                        sl.bulb.opacity = Math.random() * 0.3; 
+                    } else { 
+                        sl.bulb.opacity = THREE.MathUtils.lerp(sl.bulb.opacity, sl.baseIntensity + Math.sin(time*3)*0.1, 10*delta); 
+                    }
+                    sl.pool.opacity = sl.bulb.opacity * 0.6; // 同步假光源(光暈)的亮度
+                });
             }
 
             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
@@ -857,16 +1035,12 @@
                 if (!domainFreeze) {
                     let distToGojo = ep.mesh.position.distanceTo(new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z));
                     if (distToGojo < 3.0) {
-                        ep.speed *= Math.pow(0.1, delta * 10); 
-                        ep.mesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08));
-                        if (Math.random() < 0.15 && ep.speed > 0.5) {
-                            let hitSurfacePos = ep.mesh.position.clone().sub(playerGroup.position).normalize().multiplyScalar(1.6).add(playerGroup.position);
-                            hitSurfacePos.y += 0.8; spawnBarrierRipple(hitSurfacePos);
-                        }
+                        ep.speed *= Math.pow(0.1, delta * 10); ep.mesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08));
+                        if (Math.random() < 0.15 && ep.speed > 0.5) { let hitSurfacePos = ep.mesh.position.clone().sub(playerGroup.position).normalize().multiplyScalar(1.6).add(playerGroup.position); hitSurfacePos.y += 0.8; spawnBarrierRipple(hitSurfacePos); }
                     }
                     ep.mesh.position.addScaledVector(ep.dir, ep.speed * delta); ep.life -= delta;
                 }
-                if (ep.life <= 0 || ep.speed < 0.05) { createParticles(ep.mesh.position, 0xff3300, 10); scene.remove(ep.mesh); enemyProjectiles.splice(i, 1); }
+                if (ep.life <= 0 || ep.speed < 0.05) { createParticles(ep.mesh.position, 0xff1133, 10); scene.remove(ep.mesh); enemyProjectiles.splice(i, 1); }
             }
 
             for (let i = barrierRipples.length - 1; i >= 0; i--) {
@@ -875,25 +1049,29 @@
                 if (r.life <= 0) { scene.remove(r.mesh); barrierRipples.splice(i, 1); }
             }
 
-            if (shijimaDome && shijimaDome2) {
-                shijimaDome.rotation.y += 0.01 * delta; shijimaDome.scale.setScalar(1.0 + Math.sin(time * 0.8) * 0.015);
-                shijimaDome2.rotation.y -= 0.007 * delta; shijimaDome2.scale.setScalar(0.98 + Math.cos(time * 1.1) * 0.012);
-            }
-
             cityElements.forEach(el => {
-                if (el.userData && el.userData.glitchIntensity) {
-                    if (el.material && el.material.emissiveMap) {
-                        if (Math.random() < 0.05 * el.userData.glitchIntensity) { el.material.emissiveIntensity = Math.random() > 0.5 ? 0.05 : 0.8; }
-                    }
+                if (el.userData && el.userData.isCollapsing) {
                     if (el.userData.shakeTimer > 0) {
                         el.userData.shakeTimer -= delta; el.position.x += (Math.random() - 0.5) * 0.4; el.position.z += (Math.random() - 0.5) * 0.4;
                         if (el.userData.shakeTimer <= 0) { el.position.x = el.userData.currentPosX || el.position.x; el.position.z = el.userData.currentPosZ || el.position.z; }
                     }
-                    if (el.userData.isCollapsing) {
-                        el.scale.y = THREE.MathUtils.lerp(el.scale.y, el.userData.targetScaleY, 6 * delta);
-                        el.position.y = THREE.MathUtils.lerp(el.position.y, el.userData.targetPosY, 6 * delta);
-                        if (el.userData.outlineLine) { el.userData.outlineLine.scale.set(el.scale.x + 0.15, el.scale.y + 0.15, el.scale.z + 0.15); el.userData.outlineLine.position.copy(el.position); }
-                        if (el.userData.slime) { el.userData.slime.position.y = THREE.MathUtils.lerp(el.userData.slime.position.y, el.userData.targetPosY, 4 * delta); }
+                    el.scale.y = THREE.MathUtils.lerp(el.scale.y, el.userData.targetScaleY, 6 * delta);
+                    el.position.y = THREE.MathUtils.lerp(el.position.y, el.userData.targetPosY, 6 * delta);
+                    if(el.userData.hole) { 
+                        if(!el.userData.hole.userData) el.userData.hole.userData = {};
+                        if(!el.userData.hole.userData.savedY) el.userData.hole.userData.savedY = el.userData.hole.position.y;
+                        el.userData.hole.position.y = THREE.MathUtils.lerp(el.userData.hole.position.y, el.userData.targetPosY, 6 * delta); 
+                    }
+                } else if (el.userData && el.userData.isRestoring) {
+                    el.scale.y = THREE.MathUtils.lerp(el.scale.y, el.userData.initialScaleY, 4 * delta);
+                    el.position.y = THREE.MathUtils.lerp(el.position.y, el.userData.initialPosY, 4 * delta);
+                    if(el.userData.hole && el.userData.hole.userData.savedY) {
+                        el.userData.hole.position.y = THREE.MathUtils.lerp(el.userData.hole.position.y, el.userData.hole.userData.savedY, 4 * delta);
+                    }
+                    if (Math.abs(el.scale.y - el.userData.initialScaleY) < 0.1) {
+                        el.scale.y = el.userData.initialScaleY;
+                        el.position.y = el.userData.initialPosY;
+                        el.userData.isRestoring = false;
                     }
                 }
             });
@@ -902,31 +1080,24 @@
 
             if (dummyTorso) {
                 if (domainFreeze) {
-                    dummyPhysics.angleX = 0; dummyPhysics.angleZ = 0;
-                    dummyTorso.children.forEach(c => { if (c.material) { c.material.transparent = true; c.material.opacity = 0.3; } });
+                    dummyPhysics.angleX = 0; dummyPhysics.angleZ = 0; dummyTorso.children.forEach(c => { if (c.material) { c.material.transparent = true; c.material.opacity = 0.3; } });
                 } else {
                     dummyTorso.children.forEach(c => { if (c.material) { c.material.transparent = false; c.material.opacity = 1.0; } });
-                    const forceX = -dummyPhysics.springK * dummyPhysics.angleX - dummyPhysics.damping * dummyPhysics.velX;
-                    const forceZ = -dummyPhysics.springK * dummyPhysics.angleZ - dummyPhysics.damping * dummyPhysics.velZ;
-                    dummyPhysics.velX += forceX * delta; dummyPhysics.velZ += forceZ * delta;
-                    dummyPhysics.angleX += dummyPhysics.velX * delta; dummyPhysics.angleZ += dummyPhysics.velZ * delta;
+                    const forceX = -dummyPhysics.springK * dummyPhysics.angleX - dummyPhysics.damping * dummyPhysics.velX; const forceZ = -dummyPhysics.springK * dummyPhysics.angleZ - dummyPhysics.damping * dummyPhysics.velZ;
+                    dummyPhysics.velX += forceX * delta; dummyPhysics.velZ += forceZ * delta; dummyPhysics.angleX += dummyPhysics.velX * delta; dummyPhysics.angleZ += dummyPhysics.velZ * delta;
                     dummyTorso.rotation.x = dummyPhysics.angleX; dummyTorso.rotation.z = dummyPhysics.angleZ;
                 }
             }
 
             for (let i = crackDecals.length - 1; i >= 0; i--) {
-                let c = crackDecals[i]; c.life -= delta;
-                c.mesh.scale.setScalar(1 + (0.3 - c.life) * 2);
+                let c = crackDecals[i]; c.life -= delta; c.mesh.scale.setScalar(1 + (0.3 - c.life) * 2);
                 if(c.mesh.children[0]) c.mesh.children[0].material.opacity = c.life / 0.3;
-                if (c.life <= 0) {
-                    scene.remove(c.mesh); spawnPhysicsDebris(c.pos, c.colorHex, Math.floor(c.size * 5)); crackDecals.splice(i, 1);
-                }
+                if (c.life <= 0) { scene.remove(c.mesh); spawnPhysicsDebris(c.pos, c.colorHex, Math.floor(c.size * 5)); crackDecals.splice(i, 1); }
             }
 
             if (!domainFreeze) {
                 for (let i = physicsDebris.length - 1; i >= 0; i--) {
-                    const deb = physicsDebris[i]; deb.life -= delta; 
-                    const easeProgress = deb.life / deb.initialLife; deb.velocity.y += deb.gravity * delta;
+                    const deb = physicsDebris[i]; deb.life -= delta; const easeProgress = deb.life / deb.initialLife; deb.velocity.y += deb.gravity * delta;
                     deb.mesh.position.addScaledVector(deb.velocity, delta * Math.max(0.2, easeProgress));
                     if (deb.mesh.position.y < 0.15) { deb.mesh.position.y = 0.15; deb.velocity.y = -deb.velocity.y * 0.45; deb.velocity.x *= 0.55; deb.velocity.z *= 0.55; }
                     deb.mesh.rotation.x += deb.velocity.y * 0.1 * delta; deb.mesh.rotation.y += deb.velocity.x * 0.1 * delta;
@@ -948,7 +1119,7 @@
 
                         if (skillCharge.time > 0.6 && skillCharge.time < 1.2) {
                             skillCharge.blueOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta); skillCharge.redOrb.position.lerp(new THREE.Vector3(0, 1.5, 1.5), 8 * delta);
-                            createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x02000a, 5); 
+                            createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x010103, 5); 
                         }
                     }
                 } else {
@@ -958,16 +1129,12 @@
 
                 if (skillCharge.time >= skillCharge.maxTime) {
                     toggleCityVisibility(true); 
-                    
                     if (skillCharge.type === 'purple') {
-                        if(skillCharge.blueOrb) playerGroup.remove(skillCharge.blueOrb); 
-                        if(skillCharge.redOrb) playerGroup.remove(skillCharge.redOrb);
+                        if(skillCharge.blueOrb) playerGroup.remove(skillCharge.blueOrb); if(skillCharge.redOrb) playerGroup.remove(skillCharge.redOrb);
                         let fusionPos = new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld);
-                        createParticles(fusionPos, 0xaa00ff, 100); createParticles(fusionPos, 0x02000a, 50);  
+                        createParticles(fusionPos, 0xaa00ff, 100); createParticles(fusionPos, 0x010103, 50);  
                         timeScale = 0.1; screenShake = 3.5; spawnActualProjectile('purple_fire'); 
-                    } else {
-                        spawnActualProjectile(skillCharge.type);
-                    }
+                    } else { spawnActualProjectile(skillCharge.type); }
                     skillCharge.active = false;
                 }
             }
@@ -994,7 +1161,7 @@
 
             if (cinematic.active && cinematic.timer > 0) {
                 cinematic.timer -= delta; let progress = 1 - (cinematic.timer / cinematic.duration); camLerpSpeed = 8; 
-                raycaster.setFromCamera(mouse, camera); const aimPoint = raycaster.intersectObject(ground)[0]?.point || targetLookAt;
+                raycaster.setFromCamera(mouse, camera); const aimPoint = raycaster.intersectObjects(interactableSurfaces)[0]?.point || targetLookAt;
                 
                 if (cinematic.type === 'melee' || cinematic.type === 'teleport') { targetCamPos.copy(new THREE.Vector3(3, 2, -5).applyMatrix4(playerGroup.matrixWorld)); } 
                 else if (cinematic.type === 'blue') { targetCamPos.copy(new THREE.Vector3(4, 3, -8).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
@@ -1005,20 +1172,11 @@
             } else {
                 cinematic.active = false;
                 if (cameraMode === 3) {
-                    let offsetX = Math.sin(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle);
-                    let offsetY = Math.sin(cameraPitchAngle) * cameraDistance;
-                    let offsetZ = Math.cos(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle);
-                    targetCamPos.set(playerGroup.position.x + offsetX, playerGroup.position.y + offsetY, playerGroup.position.z + offsetZ);
-                    targetLookAt.copy(playerGroup.position); targetLookAt.y += 1.5; camLerpSpeed = 10; 
+                    let offsetX = Math.sin(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle); let offsetY = Math.sin(cameraPitchAngle) * cameraDistance; let offsetZ = Math.cos(cameraOrbitAngle) * cameraDistance * Math.cos(cameraPitchAngle);
+                    targetCamPos.set(playerGroup.position.x + offsetX, playerGroup.position.y + offsetY, playerGroup.position.z + offsetZ); targetLookAt.copy(playerGroup.position); targetLookAt.y += 1.5; camLerpSpeed = 10; 
                 } 
-                else if (cameraMode === 1) {
-                    targetCamPos.set(playerGroup.position.x, playerGroup.position.y + 1.8, playerGroup.position.z);
-                    const aimPoint = raycaster.intersectObject(ground)[0]?.point || new THREE.Vector3();
-                    targetLookAt.copy(new THREE.Vector3().addVectors(targetCamPos, new THREE.Vector3().subVectors(aimPoint, targetCamPos).normalize())); camLerpSpeed = 15; 
-                } 
-                else if (cameraMode === 2) {
-                    targetCamPos.set(playerGroup.position.x, playerGroup.position.y + cameraDistance*1.5, playerGroup.position.z + 10);
-                }
+                else if (cameraMode === 1) { targetCamPos.set(playerGroup.position.x, playerGroup.position.y + 1.8, playerGroup.position.z); const aimPoint = raycaster.intersectObjects(interactableSurfaces)[0]?.point || new THREE.Vector3(); targetLookAt.copy(new THREE.Vector3().addVectors(targetCamPos, new THREE.Vector3().subVectors(aimPoint, targetCamPos).normalize())); camLerpSpeed = 15; } 
+                else if (cameraMode === 2) { targetCamPos.set(playerGroup.position.x, playerGroup.position.y + cameraDistance*1.5, playerGroup.position.z + 10); }
             }
 
             camera.position.lerp(targetCamPos, camLerpSpeed * delta); smoothCameraLookAt.lerp(targetLookAt, (camLerpSpeed + 2) * delta); camera.lookAt(smoothCameraLookAt);
@@ -1039,36 +1197,23 @@
 
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 let p = projectiles[i]; p.mesh.position.addScaledVector(p.dir, p.speed * delta); p.life -= delta;
-
                 checkBuildingHits(p.mesh.position, p.size, p.dir, p.type);
 
                 if (p.mesh.position.distanceTo(dummyPhysics.position) < (p.size + 1.2) && !domainFreeze) {
                     let pushForce = 35; if (p.type === 'purple') pushForce = 90; if (p.type === 'blue') pushForce = -20;  
                     dummyPhysics.velX = p.dir.z * pushForce; dummyPhysics.velZ = -p.dir.x * pushForce;
-                    spawnCrackAndShatter(p.mesh.position, (p.type==='purple'?0xaa00ff:(p.type==='blue'?0x00aaff:0xff0055)), p.type === 'purple' ? 10 : 5, true);
-                    p.life = 0;
+                    spawnCrackAndShatter(p.mesh.position, (p.type==='purple'?0xaa00ff:(p.type==='blue'?0x00aaff:0xff0055)), p.type === 'purple' ? 10 : 5, true); p.life = 0;
                 }
 
-                if (p.type === 'blue') {
-                    p.mesh.children.forEach(c => { if(c.geometry && c.geometry.type==='TorusGeometry') { c.rotation.x+=12*delta; c.rotation.y+=12*delta; }});
-                    screenShake = Math.max(screenShake, 0.2); if(Math.random()<0.6) createImplosionParticles(p.mesh.position, 12, 0x0088ff, 3);
-                }
-                if (p.type === 'red') {
-                    p.mesh.scale.addScalar(4*delta); screenShake = Math.max(screenShake, 0.4); 
-                    if(Math.random()<0.7) createParticles(p.mesh.position, 0xff3300, 5, 30); if(Math.random()<0.3) createParticles(p.mesh.position, 0xff0000, 2, 60); 
-                }
-                if (p.type === 'purple') {
-                    p.mesh.scale.addScalar(1.5*delta); p.mesh.rotation.y+=5*delta; p.mesh.rotation.x+=3*delta; screenShake = 0.6; 
-                    if(Math.random()<0.8) createParticles(p.mesh.position, 0x050011, 8); if(Math.random()<0.5) createParticles(p.mesh.position, p.color, 5); if(Math.random()<0.3) createImplosionParticles(p.mesh.position, 15, 0xaa00ff, 2);
-                }
+                if (p.type === 'blue') { p.mesh.children.forEach(c => { if(c.geometry && c.geometry.type==='TorusGeometry') { c.rotation.x+=12*delta; c.rotation.y+=12*delta; }}); screenShake = Math.max(screenShake, 0.2); if(Math.random()<0.6) createImplosionParticles(p.mesh.position, 12, 0x0088ff, 3); }
+                if (p.type === 'red') { p.mesh.scale.addScalar(4*delta); screenShake = Math.max(screenShake, 0.4); if(Math.random()<0.7) createParticles(p.mesh.position, 0xff3300, 5, 30); if(Math.random()<0.3) createParticles(p.mesh.position, 0xff0000, 2, 60); }
+                if (p.type === 'purple') { p.mesh.scale.addScalar(1.5*delta); p.mesh.rotation.y+=5*delta; p.mesh.rotation.x+=3*delta; screenShake = 0.6; if(Math.random()<0.8) createParticles(p.mesh.position, 0x010103, 8); if(Math.random()<0.5) createParticles(p.mesh.position, p.color, 5); if(Math.random()<0.3) createImplosionParticles(p.mesh.position, 15, 0xaa00ff, 2); }
 
                 if (p.life <= 0) {
-                    if (p.type === 'purple') { screenShake = 4.0; createParticles(p.mesh.position, 0x02000a, 80); } 
+                    if (p.type === 'purple') { screenShake = 4.0; createParticles(p.mesh.position, 0x010103, 80); } 
                     else if (p.type === 'red') { screenShake = 1.5; } 
                     else if (p.type === 'blue') { screenShake = 2.0; createImplosionParticles(p.mesh.position, 25, 0x00ffff, 80); }
-                    
-                    spawnCrackAndShatter(p.mesh.position, p.color, p.type === 'purple' ? 12 : 5, false);
-                    scene.remove(p.mesh); projectiles.splice(i, 1);
+                    spawnCrackAndShatter(p.mesh.position, p.color, p.type === 'purple' ? 12 : 5, false); scene.remove(p.mesh); projectiles.splice(i, 1);
                 }
             }
 
@@ -1083,8 +1228,7 @@
             }
 
             for (let i = spatialGlitches.length - 1; i >= 0; i--) {
-                let g = spatialGlitches[i]; g.life -= delta; g.mesh.material.opacity = g.life / 0.15;
-                g.mesh.position.x += (Math.random() - 0.5) * 0.1; 
+                let g = spatialGlitches[i]; g.life -= delta; g.mesh.material.opacity = g.life / 0.15; g.mesh.position.x += (Math.random() - 0.5) * 0.1; 
                 if (g.life <= 0) { scene.remove(g.mesh); spatialGlitches.splice(i, 1); }
             }
             for (let i = afterimages.length - 1; i >= 0; i--) {
@@ -1097,8 +1241,7 @@
             renderer.render(scene, camera);
         }
         
-        init();
-        animate();
+        init(); animate();
     </script>
 </body>
 </html>
