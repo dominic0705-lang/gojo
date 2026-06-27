@@ -74,7 +74,11 @@
         .cd-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: bold; color: #ff3333; z-index: 3; display: none; text-shadow: 0 0 5px #000; }
 
         select { background: #0a0512; color: #aa55ff; border: 1px solid #aa55ff; padding: 6px; border-radius: 4px; outline: none; cursor: pointer; font-size: 13px; }
-        
+        button.action-btn { background: #aa33ff; color: #fff; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: background 0.2s; }
+        button.action-btn:hover { background: #cc66ff; }
+        button.action-btn.danger { background: #551133; }
+        button.action-btn.danger:hover { background: #881144; }
+
         #domain-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; opacity: 0; transition: opacity 0.1s; pointer-events: none; z-index: 5; mix-blend-mode: overlay; }
 
         .domain-ui-mode .panel { background: rgba(0, 5, 20, 0.2); border-color: rgba(170, 0, 255, 0.5); box-shadow: 0 0 30px rgba(170, 0, 255, 0.2); }
@@ -175,7 +179,6 @@
                 <option value="off">關閉 (無限火力！)</option>
             </select>
 
-            <!-- 新增：咒力覆蓋範圍設定 -->
             <label style="font-size: 12px; color:#aaa; margin-top:5px;">咒力覆蓋部位 (招式 6)</label>
             <select id="coating-area">
                 <option value="all" selected>全身 (綜合強化)</option>
@@ -183,6 +186,13 @@
                 <option value="legs">雙腿 (機動強化)</option>
                 <option value="weapon">武器 (鋒芒收束)</option>
             </select>
+
+            <!-- 新增：小怪生成選單 -->
+            <label style="font-size: 12px; color:#aaa; margin-top:5px;">咒靈測試 (小怪)</label>
+            <div style="display: flex; gap: 5px;">
+                <button id="btn-spawn-mob" class="action-btn" style="flex:1;">召喚咒靈</button>
+                <button id="btn-clear-mob" class="action-btn danger" style="flex:1;">清除所有</button>
+            </div>
         </div>
 
         <div id="bottom-center">
@@ -191,7 +201,6 @@
             <div class="skill-box" id="skill-purple"><div class="cd-overlay" id="cd-over-purple"></div><div class="cd-text" id="cd-txt-purple"></div><div class="skill-key">3</div><span class="skill-name">虛式 茈</span></div>
             <div class="skill-box" id="skill-domain"><div class="cd-overlay" id="cd-over-domain"></div><div class="cd-text" id="cd-txt-domain"></div><div class="skill-key">4</div><span class="skill-name">無量<br>空處</span></div>
             <div class="skill-box" id="skill-teleport"><div class="cd-overlay" id="cd-over-teleport"></div><div class="cd-text" id="cd-txt-teleport"></div><div class="skill-key">5</div><span class="skill-name">瞬移</span></div>
-            <!-- 新增：招式六 咒力覆蓋 -->
             <div class="skill-box" id="skill-coating"><div class="cd-overlay" id="cd-over-coating"></div><div class="cd-text" id="cd-txt-coating"></div><div class="skill-key">6</div><span class="skill-name">咒力<br>覆蓋</span></div>
             <div class="skill-box" id="skill-melee"><div class="cd-overlay" id="cd-over-melee"></div><div class="cd-text" id="cd-txt-melee"></div><div class="skill-key">Z</div><span class="skill-name">體術</span></div>
         </div>
@@ -200,7 +209,7 @@
     <script>
         // --- 全域變數宣告 ---
         let gameStarted = false; let isSettingsOpen = false; let isCDEnabled = true;
-        let selectedCharacter = 'gojo'; // 預設選擇五條悟
+        let selectedCharacter = 'gojo'; 
         
         let scene, camera, renderer, clock = new THREE.Clock();
         let playerGroup, leftArmGroup, rightArmGroup, leftLegGroup, rightLegGroup, limitlessBarrier, katanaGroup;
@@ -208,13 +217,17 @@
         let cityElements = [], ground, interactableSurfaces = [];
         let spatialGlitches = [], afterimages = [], impactFlashes = []; let crackDecals = []; 
         let flickeringSigns = [], cursedResiduals = [], streetLights = []; let barrierWall = null, barrierGrid = null;
-        let speechRings = []; // 新增：用於管理咒言擴散的音波漣漪
-        let spaceShatters = []; // 新增：用於管理天空/空間碎裂的特效陣列
+        let speechRings = []; 
+        let spaceShatters = []; 
         
         let dummyGroup, dummyTorso, dummyHead;
         let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
         let dummyAttackTimer = 3.0; 
         
+        // --- 新增：小怪系統變數 ---
+        let activeMobs = [];
+        const MAX_MOBS = 30;
+
         let domainState = { active: false, timer: 0, phase: 'none', group: null, infoParticles: null };
 
         const keys = { w: false, a: false, s: false, d: false };
@@ -244,10 +257,8 @@
         let skillCharge = { active: false, type: '', time: 0, maxTime: 0, blueOrb: null, redOrb: null };
         let isAttacking = false; let attackType = 0; let attackTimer = 0;
         
-        // 新增連擊系統的變數
         let meleeComboStep = 0; let meleeComboWindow = 0;
 
-        // 新增：招式六的 CD 與狀態變數
         const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5, coating: 15.0 };
         const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0, coating: 0 };
         let coatingState = { active: false, timer: 0, auras: [] };
@@ -290,7 +301,6 @@
                 document.querySelector('#skill-blue .skill-name').innerHTML = "宇守<br>羅彈";
                 document.querySelector('#skill-red .skill-name').innerHTML = "咒言";
                 document.querySelector('#skill-purple .skill-name').innerHTML = "反轉<br>術式";
-                // --- 更新：解鎖乙骨的領域展開 ---
                 document.querySelector('#skill-domain .skill-name').innerHTML = domainState.active ? "解除<br>領域" : "真贗<br>相愛";
                 document.querySelector('#skill-melee .skill-name').innerHTML = "斬擊";
                 document.querySelector('#skill-coating .skill-name').innerHTML = coatingState.active ? "解除<br>覆蓋" : "咒力<br>覆蓋";
@@ -316,9 +326,98 @@
         document.getElementById('skill-purple').onclick = () => shootProjectile('purple');
         document.getElementById('skill-domain').onclick = () => activateDomain();
         document.getElementById('skill-teleport').onclick = () => teleport();
-        document.getElementById('skill-coating').onclick = () => activateCoating(); // 招式六綁定
+        document.getElementById('skill-coating').onclick = () => activateCoating(); 
         document.getElementById('skill-melee').onclick = () => castMelee();
         document.getElementById('restore-btn').addEventListener('click', restoreCity);
+
+        // --- 新增：小怪系統按鈕事件 ---
+        document.getElementById('btn-spawn-mob').addEventListener('click', spawnMob);
+        document.getElementById('btn-clear-mob').addEventListener('click', clearAllMobs);
+
+        // --- 新增：小怪生成邏輯 ---
+        function spawnMob() {
+            if (!gameStarted || activeMobs.length >= MAX_MOBS) return;
+
+            const mobGroup = new THREE.Group();
+            
+            // 簡約的咒靈模型 (深邃紫黑)
+            const bodyMat = new THREE.MeshStandardMaterial({color: 0x110022, roughness: 0.9, metalness: 0.1});
+            const glowMat = new THREE.MeshBasicMaterial({color: 0xaa00ff}); // 眼睛/核心發光
+
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), bodyMat);
+            torso.position.y = 0.6;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), bodyMat);
+            head.position.y = 1.4;
+            const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), glowMat);
+            eyeL.position.set(-0.12, 1.45, 0.32);
+            const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), glowMat);
+            eyeR.position.set(0.12, 1.45, 0.32);
+
+            const armL = new THREE.Group(); armL.position.set(-0.55, 1.1, 0);
+            armL.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), bodyMat).translateY(-0.3));
+            const armR = new THREE.Group(); armR.position.set(0.55, 1.1, 0);
+            armR.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), bodyMat).translateY(-0.3));
+
+            mobGroup.add(torso, head, eyeL, eyeR, armL, armR);
+
+            // 在玩家周圍隨機生成
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 15 + Math.random() * 15;
+            let spawnX = playerGroup.position.x + Math.cos(angle) * dist;
+            let spawnZ = playerGroup.position.z + Math.sin(angle) * dist;
+            spawnX = THREE.MathUtils.clamp(spawnX, -380, 380);
+            spawnZ = THREE.MathUtils.clamp(spawnZ, -380, 380);
+            
+            mobGroup.position.set(spawnX, 0, spawnZ);
+            scene.add(mobGroup);
+
+            // 出現特效
+            createParticles(mobGroup.position.clone().setY(1), 0xaa00ff, 15);
+            createSpatialGlitch(mobGroup.position.clone().setY(1));
+
+            activeMobs.push({
+                mesh: mobGroup,
+                health: 100, // 兩拳或一發技能可擊殺
+                speed: 3 + Math.random() * 3, // 移動速度
+                arms: [armL, armR],
+                attackTimer: 0,
+                velX: 0, velZ: 0
+            });
+        }
+
+        function clearAllMobs() {
+            activeMobs.forEach(m => {
+                createParticles(m.mesh.position.clone().setY(1), 0xaa00ff, 15);
+                scene.remove(m.mesh);
+            });
+            activeMobs = [];
+        }
+
+        // --- 新增：小怪受擊通用判定 ---
+        function checkMobHits(hitPos, radius, dir, pushForce, skillType) {
+            activeMobs.forEach(mob => {
+                // 如果在範圍內
+                if (mob.mesh.position.distanceTo(new THREE.Vector3(hitPos.x, mob.mesh.position.y, hitPos.z)) < radius + 0.8) {
+                    mob.health -= 60; // 固定傷害，通常2下或1發重擊死
+                    
+                    // 擊退力道 (依據攻擊方向)
+                    mob.velX = dir.x * pushForce;
+                    mob.velZ = dir.z * pushForce;
+
+                    let fxColor = 0xaa00ff;
+                    if(skillType==='blue') fxColor = 0x00aaff;
+                    if(skillType==='red') fxColor = 0xff0033;
+                    if(skillType==='purple' || skillType==='slash') fxColor = 0xffffff;
+                    
+                    createImpactFlash(mob.mesh.position.clone().setY(1), fxColor);
+                    
+                    // 根據受擊類型產生額外特效
+                    if(skillType === 'slash') {
+                        spawnCrackAndShatter(mob.mesh.position, 0x110022, 2, false);
+                    }
+                }
+            });
+        }
 
         // --- 場景修復功能 ---
         function restoreCity() {
@@ -701,6 +800,9 @@
             cityElements.forEach(el => { el.visible = visible; }); ground.visible = visible; 
             if(barrierWall) barrierWall.visible = visible; if(barrierGrid) barrierGrid.visible = visible;
             flickeringSigns.forEach(s => { s.mesh.visible = visible; }); cursedResiduals.forEach(r => { r.mesh.visible = visible; });
+            
+            // 領域時隱藏小怪
+            activeMobs.forEach(m => { m.mesh.visible = visible; });
         }
 
         function createTrainingDummy() {
@@ -768,14 +870,12 @@
         function spawnSpaceShatter(pos, size) {
             const group = new THREE.Group();
             group.position.copy(pos);
-            // 讓裂痕永遠面向鏡頭，製造出宛如螢幕/空間表面被打破的 2D 魄力感
             group.lookAt(camera.position);
 
             const glowMat = new THREE.LineBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 1.0 });
             const coreMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1.0 });
             
             const points = [];
-            // 產生隨機放射狀的閃電/玻璃裂痕
             const numBranches = 8 + Math.floor(Math.random() * 5);
             for (let i = 0; i < numBranches; i++) {
                 let angle = (i / numBranches) * Math.PI * 2 + (Math.random() - 0.5) * 1.0;
@@ -787,18 +887,16 @@
                 
                 for (let j = 0; j < segments; j++) {
                     let stepLength = length / segments;
-                    angle += (Math.random() - 0.5) * 1.5; // 銳利不規則的轉折
+                    angle += (Math.random() - 0.5) * 1.5; 
                     curPos.x += Math.cos(angle) * stepLength;
                     curPos.y += Math.sin(angle) * stepLength;
                     branchPoints.push(curPos.clone());
                 }
                 
-                // 轉換為 LineSegments 所需的 A-B, B-C 格式
                 for(let k=0; k<branchPoints.length-1; k++) {
                     points.push(branchPoints[k], branchPoints[k+1]);
                 }
                 
-                // 隨機產生分支細紋
                 if (Math.random() > 0.3) {
                     let subStart = branchPoints[Math.floor(branchPoints.length / 2)];
                     let subAngle = angle + (Math.random() > 0.5 ? 1 : -1) * (0.5 + Math.random());
@@ -817,16 +915,15 @@
             const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
             const glowLine = new THREE.LineSegments(lineGeom, glowMat);
             const coreLine = new THREE.LineSegments(lineGeom, coreMat);
-            glowLine.scale.setScalar(1.05); // 讓外暈稍大
+            glowLine.scale.setScalar(1.05); 
             glowLine.position.z = -0.1;
             
             group.add(glowLine);
             group.add(coreLine);
             
-            // 裂痕深處的純黑色虛無空間碎片
             const darkMat = new THREE.MeshBasicMaterial({color: 0x020005, side: THREE.DoubleSide, transparent: true, opacity: 0.9});
             for(let i=0; i<6; i++) {
-                const shardGeom = new THREE.CircleGeometry(size * (0.15 + Math.random()*0.2), 3); // 不規則三角形
+                const shardGeom = new THREE.CircleGeometry(size * (0.15 + Math.random()*0.2), 3); 
                 const shard = new THREE.Mesh(shardGeom, darkMat);
                 shard.position.set((Math.random()-0.5)*size*0.5, (Math.random()-0.5)*size*0.5, -0.2);
                 shard.rotation.z = Math.random() * Math.PI * 2;
@@ -837,7 +934,6 @@
             scene.add(group);
             spaceShatters.push({ group: group, life: 0.8, maxLife: 0.8, meshes: [glowLine, coreLine, ...group.children] });
             
-            // 噴發清澈如玻璃般的碎屑
             spawnPhysicsDebris(pos, 0xaaddff, 30);
             createImpactFlash(pos, 0x88ccff);
         }
@@ -881,7 +977,6 @@
             activeDistortions.push({ pos: pos.clone(), strength: strength, radius: radius, life: life, maxLife: life });
         }
 
-        // --- 清除並移除現有的咒力覆蓋 ---
         function clearCoating() {
             coatingState.active = false;
             coatingState.auras.forEach(a => {
@@ -891,7 +986,6 @@
             });
             coatingState.auras = [];
             
-            // 恢復技能圖示名稱
             let baseName = selectedCharacter === 'gojo' ? "咒力<br>強化" : "咒力<br>覆蓋";
             if (document.querySelector('#skill-coating .skill-name')) {
                 document.querySelector('#skill-coating .skill-name').innerHTML = baseName;
@@ -899,7 +993,7 @@
         }
 
         function createPlayer() {
-            clearCoating(); // 切換角色或重新生成前先清除特效
+            clearCoating(); 
             if (playerGroup) scene.remove(playerGroup);
             playerGroup = new THREE.Group(); playerGroup.position.set(0, 1.8, 0); 
             
@@ -930,14 +1024,12 @@
 
                 const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.6, 8), jacketMat); torso.position.y = 0.8; playerGroup.add(torso);
                 
-                // 乙骨招牌高領
                 const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.3, 16), jacketMat);
                 collar.position.y = 0.85; torso.add(collar);
 
                 const headGroup = new THREE.Group(); headGroup.position.y = 1.8; 
                 headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), skinMat));
                 
-                // 乙骨的凌亂黑髮
                 const hairMat = new THREE.MeshStandardMaterial({color: 0x151515, roughness: 0.9});
                 const hairGeo = new THREE.DodecahedronGeometry(0.38, 1);
                 const hair = new THREE.Mesh(hairGeo, hairMat);
@@ -971,7 +1063,6 @@
 
                 rightArmGroup.add(katanaGroup);
                 
-                // 新增：咒言擴音器模型 (預設隱藏)
                 const megaphoneGroup = new THREE.Group();
                 megaphoneGroup.name = "megaphone";
                 const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.03, 0.4, 16, 1, true), new THREE.MeshStandardMaterial({color: 0xdddddd, roughness: 0.2, metalness: 0.8, side: THREE.DoubleSide}));
@@ -980,7 +1071,6 @@
                 const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.2, 8), new THREE.MeshStandardMaterial({color: 0x222222}));
                 grip.position.set(0, -0.15, 0.1);
                 megaphoneGroup.add(grip);
-                // 蛇眼與牙紋路 (簡單示意)
                 const mark = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.14, 16), new THREE.MeshBasicMaterial({color: 0x111111, side: THREE.DoubleSide}));
                 mark.position.z = 0.15;
                 megaphoneGroup.add(mark);
@@ -1046,15 +1136,11 @@
             impactFlashes.push({ group: group, light: light, meshes: [core, halo], life: 0.15 });
         }
         
-        // --- 新增：打擊停頓 (Hit Stop) 系統 ---
-        // 瞬間將全局時間流速放慢，營造強大的力量感與打擊定格特效
         function triggerHitStop(severity) {
-            timeScale = 0.05; // 瞬間將時間放慢到 5%
+            timeScale = 0.05; 
         }
 
-        // --- 新增：黑閃 (Black Flash) 系統與特效 ---
         function createBlackFlash(pos, scale = 5) {
-            // 全螢幕黑紅反轉閃爍
             const overlay = document.getElementById('domain-overlay');
             overlay.style.transition = 'none';
             overlay.style.background = '#050011';
@@ -1067,7 +1153,6 @@
                 overlay.style.opacity = '0';
             }, 50);
 
-            // 生成網狀黑色閃電
             for(let i=0; i<8; i++) {
                 const pGeo = new THREE.BufferGeometry();
                 const points = [];
@@ -1081,12 +1166,10 @@
                 }
                 pGeo.setFromPoints(points);
                 
-                // 核心黑線
                 const line = new THREE.Line(pGeo, new THREE.LineBasicMaterial({ color: 0x010101, linewidth: 3 }));
                 scene.add(line);
-                spatialGlitches.push({ mesh: line, life: 0.3 }); // 借用空間扭曲陣列來消除閃電
+                spatialGlitches.push({ mesh: line, life: 0.3 }); 
                 
-                // 紅色外暈
                 const lineRed = new THREE.Line(pGeo, new THREE.LineBasicMaterial({ color: 0xff0022, transparent: true, opacity: 0.8 }));
                 lineRed.scale.setScalar(1.1);
                 scene.add(lineRed);
@@ -1095,30 +1178,25 @@
             createImpactFlash(pos, 0xff0033);
         }
 
-        // --- 新增：突破音障的圓環衝擊波 ---
         function createSonicBoom(pos, dir) {
             const rGroup = new THREE.Group();
             rGroup.position.copy(pos);
             rGroup.position.y += 1.2;
             rGroup.lookAt(pos.clone().add(dir).setY(pos.y + 1.2));
 
-            // 正面的白色實體音爆環
             const ringGeo = new THREE.TorusGeometry(1.5, 0.15, 8, 32);
             const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             rGroup.add(ring);
 
-            // 內層因高壓產生的空間扭曲感光暈
             const ringMat2 = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
             const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.3, 8, 32), ringMat2);
             rGroup.add(ring2);
 
             scene.add(rGroup);
-            // 借用 speechRings 的極速擴散與淡出邏輯
             speechRings.push({ mesh: rGroup, scale: 0.5, life: 0.3 }); 
         }
 
-        // --- 新增：黑紫色的彗星尾跡與狂暴風道 ---
         function createCometTrail(startPos, endPos, dir) {
             const distance = startPos.distanceTo(endPos);
             const midPoint = startPos.clone().lerp(endPos, 0.5);
@@ -1128,14 +1206,12 @@
             trailGroup.position.copy(midPoint);
             trailGroup.lookAt(endPos.clone().setY(midPoint.y));
 
-            // 核心：高密度黑紫光芒
             const coreGeo = new THREE.CylinderGeometry(0.5, 0.1, distance, 12, 1, true);
             const coreMat = new THREE.MeshBasicMaterial({ color: 0x050011, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
             const core = new THREE.Mesh(coreGeo, coreMat);
             core.rotation.x = Math.PI / 2;
             trailGroup.add(core);
 
-            // 外層：激盪的紫色咒力殘光
             const auraGeo = new THREE.CylinderGeometry(1.5, 0.3, distance, 12, 1, true);
             const auraMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
             const aura = new THREE.Mesh(auraGeo, auraMat);
@@ -1144,11 +1220,9 @@
 
             scene.add(trailGroup);
             
-            // 借用 impactFlashes 淡出尾跡
             const dummyLight = new THREE.PointLight(0x000000, 0, 0);
             impactFlashes.push({ group: trailGroup, light: dummyLight, meshes: [core, aura], life: 0.3 });
 
-            // 捲入沿途的粉塵與碎玻璃地毯
             for(let i=0; i<15; i++) {
                 const pPos = startPos.clone().lerp(endPos, Math.random());
                 pPos.y += Math.random() * 2;
@@ -1159,10 +1233,8 @@
         function dash() {
             if (!gameStarted || skillCharge.active) return;
             const isYuta = selectedCharacter === 'yuta';
-            // 乙骨的爆發力能帶來更長、更暴力的衝刺距離
             const dashDistance = isYuta ? 22.0 : 14.0; 
             
-            // 根據玩家目前面向的角度決定衝刺方向
             const dir = new THREE.Vector3(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y)).normalize();
             
             const startPos = playerGroup.position.clone();
@@ -1171,37 +1243,27 @@
             endPos.z = THREE.MathUtils.clamp(endPos.z, -390, 390);
 
             if (isYuta) {
-                // --- 乙骨憂太：極致肉體爆發的直線彈射 ---
-                
-                // 1. 動態起手式：強行壓低重心，身體近乎平行地面
                 playerGroup.rotation.x = Math.PI / 3.5; 
-                playerGroup.position.y = (playerGroup.userData.targetY || 0) + 0.5; // 重心急劇下沉
+                playerGroup.position.y = (playerGroup.userData.targetY || 0) + 0.5; 
                 leftLegGroup.rotation.x = -Math.PI / 3;
                 rightLegGroup.rotation.x = -Math.PI / 3;
-                if (katanaGroup) katanaGroup.rotation.x = Math.PI / 2; // 死死扣住刀柄
+                if (katanaGroup) katanaGroup.rotation.x = Math.PI / 2; 
 
-                // 2. 起點炸裂：軍靴蹬碎地面的恐怖反作用力
                 spawnCrackAndShatter(startPos, 0x1a1a20, 6, false);
                 spawnPhysicsDebris(startPos, 0x222222, 25);
                 createImpactFlash(startPos, 0x5500aa);
 
-                // 3. 突破音障的白色圓環衝擊波
                 createSonicBoom(startPos, dir);
-
-                // 4. 被拉扯得極長的黑紫色彗星尾跡與狂暴風道
                 createCometTrail(startPos, endPos, dir);
 
-                // 5. 終點急停與焦油白煙 (摩擦深溝)
                 setTimeout(() => {
-                    spawnCrackAndShatter(endPos, 0x050505, 5, false); // 犁出焦黑深溝
-                    createEvaporationParticles(endPos.clone().setY(0.2), 0x999999, 20); // 摩擦的高溫白煙
+                    spawnCrackAndShatter(endPos, 0x050505, 5, false); 
+                    createEvaporationParticles(endPos.clone().setY(0.2), 0x999999, 20); 
                 }, 50);
 
-                // 6. 空間塌陷與窒息感壓迫
                 addDistortion(endPos, 0.5, 2.5, 0.4); 
-                screenShake = 4.5; // 破壞性的鏡頭震動
+                screenShake = 4.5; 
 
-                // 高密度的殘影
                 createAfterimage(startPos, playerGroup.rotation.y);
                 createAfterimage(startPos.clone().lerp(endPos, 0.25), playerGroup.rotation.y);
                 createAfterimage(startPos.clone().lerp(endPos, 0.5), playerGroup.rotation.y);
@@ -1209,14 +1271,12 @@
 
                 triggerCinematic('teleport', 0.2);
             } else {
-                // --- 五條悟：平穩無波的無下限位移 ---
-                // 留下移動殘影
                 createAfterimage(startPos, playerGroup.rotation.y);
                 createAfterimage(startPos.clone().lerp(endPos, 0.33), playerGroup.rotation.y);
                 createAfterimage(startPos.clone().lerp(endPos, 0.66), playerGroup.rotation.y);
                 
                 createParticles(startPos, 0x00ffff, 15, 8);
-                addDistortion(startPos, 0.15, 0.4, 0.2); // 輕微的空間扭曲
+                addDistortion(startPos, 0.15, 0.4, 0.2); 
                 triggerCinematic('teleport', 0.15); 
                 screenShake = 1.0;
             }
@@ -1280,6 +1340,8 @@
                     }
                 }
             }
+            // 新增：順便檢測對小怪的打擊
+            checkMobHits(impactPos, radius, dir, (skillType === 'purple' ? 80 : 35), skillType);
         }
 
         function castMelee() {
@@ -1315,9 +1377,10 @@
                     spawnCrackAndShatter(hitPos, 0x222222, 2.0, false);
                 }
                 checkBuildingHits(hitPos, 2.5, dir, 'melee');
+                // 對小怪進行近戰傷害檢測
+                checkMobHits(hitPos, 3.0, dir, 30, 'melee');
 
             } else if (selectedCharacter === 'yuta') {
-                // --- 完美恢復：乙骨憂太的純粹 3 段連擊系統 (無文字宣告) ---
                 if (isCDEnabled && cooldowns.melee > 0 && meleeComboStep === 0) return;
                 if (attackTimer > 0.15) return; 
 
@@ -1389,7 +1452,7 @@
                         dummyPhysics.velX = dir.z * 80; dummyPhysics.velZ = -dir.x * 80; 
                         spawnCrackAndShatter(hitPos, 0x1a1a20, 5.0, false); createImpactFlash(hitPos, 0xffffff); 
                         createShockwave(hitPos, 0xffffff, 30); addDistortion(hitPos, 0.2, 0.5, 0.5); 
-                        triggerHitStop(60); createBlackFlash(hitPos, 8); // 添加黑閃
+                        triggerHitStop(60); createBlackFlash(hitPos, 8); 
                     } else { spawnCrackAndShatter(hitPos, 0xffffff, 4.0, false); }
                     checkBuildingHits(hitPos, 6.0, dir, 'slash');
                 }
@@ -1414,17 +1477,14 @@
                 if (isCDEnabled && cooldowns.red > 0) return;
                 if (isCDEnabled) cooldowns.red = cdMax.red;
                 
-                // 依照截圖更新字體發光顏色為耀眼粉紫
                 announceSkillText("咒言「不許動」", "#ff00aa");
                 
                 isAttacking = true; attackType = 11; attackTimer = 1.2; 
-                // 縮短前搖，配合扯開領口的瞬間爆發
                 skillCharge = { active: true, time: 0, maxTime: 0.4, type: 'cursed_speech' };
                 triggerCinematic('red', 1.2);
                 return;
             }
 
-            // --- 新增：乙骨憂太 第三招 反轉術式 (近身爆發) ---
             if (selectedCharacter === 'yuta' && type === 'purple') {
                 if (isCDEnabled && cooldowns.purple > 0) return;
                 if (isCDEnabled) cooldowns.purple = cdMax.purple;
@@ -1433,7 +1493,6 @@
                 isAttacking = true; attackType = 12; attackTimer = 1.0; 
                 skillCharge = { active: true, time: 0, maxTime: 0.4, type: 'rct_grab' };
                 
-                // 瞬間突進縮短距離
                 const dashDistance = 8.0;
                 const dir = new THREE.Vector3(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y)).normalize();
                 const startPos = playerGroup.position.clone();
@@ -1444,11 +1503,10 @@
                 createAfterimage(startPos.clone().lerp(endPos, 0.5), playerGroup.rotation.y);
                 playerGroup.position.x = endPos.x; playerGroup.position.z = endPos.z;
 
-                triggerCinematic('melee', 1.0); // 使用近身運鏡
+                triggerCinematic('melee', 1.0); 
                 return;
             }
 
-            // 【完美修復】：將意外被改掉的「虛式·茈」生成邏輯補回
             if (type === 'purple') {
                 if (selectedCharacter !== 'gojo') {
                     announceSkillText("招式待解鎖...", "#ff3333");
@@ -1495,7 +1553,6 @@
             if (type === 'blue') { color = 0x0044ff; size = 2.0; speed = 35; intensity = 5; life = 2.5; createGravitationalRings(projGroup, size, 0x00ffff); } 
             else if (type === 'red') { createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5; color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; } 
             if (type === 'space_rend') {
-                // --- 獨立邏輯：宇守羅彈 (空間斷裂波) ---
                 color = 0xffffff; size = 3.5; speed = 60; intensity = 0; life = 1.2;
                 createShockwave(playerGroup.position, 0xffffff, 50);
                 addDistortion(playerGroup.position, 0.8, 1.2, 0.4); 
@@ -1506,50 +1563,51 @@
                 projGroup.add(new THREE.Mesh(rippleGeo, rippleMat));
             }
             else if (type === 'cursed_speech') {
-                // --- 獨立邏輯：咒言 (純粹聲波與言靈衝擊，不再扭曲空間) ---
                 let mouthPos = new THREE.Vector3(0, 1.8, 0).applyMatrix4(playerGroup.matrixWorld);
                 
-                // 發射出多重高速擴散的純白大氣聲波環
                 for(let i=0; i<4; i++) {
                     setTimeout(() => {
                         const rGroup = new THREE.Group(); rGroup.position.copy(mouthPos); rGroup.lookAt(mouthPos.clone().add(dir));
-                        // 使用圓環與平面模擬音波的高頻推擠
                         const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending }));
                         const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.05, 8, 32), new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending }));
                         ring2.position.z = -0.5;
                         rGroup.add(ring1); rGroup.add(ring2);
                         scene.add(rGroup);
                         speechRings.push({ mesh: rGroup, scale: 0.5, life: 0.6 });
-                    }, i * 80); // 更密集的音波發射間隔
+                    }, i * 80); 
                 }
 
                 screenShake = 2.5; 
 
-                // 尋找音波落點
                 let hitPos = new THREE.Vector3(playerGroup.position.x + dir.x * 12, 0, playerGroup.position.z + dir.z * 12);
                 if (playerGroup.position.distanceTo(dummyPhysics.position) < 20 && dir.dot(new THREE.Vector3().subVectors(dummyPhysics.position, playerGroup.position).normalize()) > 0.85) {
                     hitPos = dummyPhysics.position.clone();
                 }
                 
-                // 延遲引發獨立特效「言靈重壓」
                 setTimeout(() => {
                     spawnWordPressure(hitPos);
                     checkBuildingHits(hitPos, 4.0, dir, 'slash'); 
                 }, 150); 
 
-                return; // 咒言是瞬發的音波，不產生常規向前飛行的 projectiles 實體
+                return; 
             }
 
-            // --- 新增：反轉術式 (RCT Grab) 直接結算不產生飛行物 ---
             if (type === 'rct_grab') {
                 let hitPos = new THREE.Vector3(playerGroup.position.x + dir.x * 1.5, playerGroup.position.y + 1.2, playerGroup.position.z + dir.z * 1.5);
                 
-                // 判定是否抓取到假人 (目標)
                 if (playerGroup.position.distanceTo(dummyPhysics.position) < 4.0) {
                     hitPos = dummyPhysics.position.clone(); hitPos.y += 1.0;
-                    // 將力量與能量瞬間壓入目標體內
                     dummyPhysics.velX = dir.z * 40; dummyPhysics.velZ = -dir.x * 40;
-                    dummyPhysics.angleX = Math.PI / 4; // 被重重壓下
+                    dummyPhysics.angleX = Math.PI / 4; 
+                } else {
+                    // 若沒抓到假人，嘗試抓取小怪
+                    activeMobs.forEach(mob => {
+                        if (playerGroup.position.distanceTo(mob.mesh.position) < 4.0) {
+                            hitPos = mob.mesh.position.clone(); hitPos.y += 1.0;
+                            mob.health -= 150; 
+                            mob.velX = dir.x * 40; mob.velZ = dir.z * 40;
+                        }
+                    });
                 }
                 
                 spawnRCTExplosion(hitPos);
@@ -1557,7 +1615,6 @@
                 return; 
             }
 
-            // 處理常規飛行物 (蒼、赫、茈)
             if (type !== 'space_rend' && type !== 'cursed_speech') {
                 if (type === 'purple_fire') { color = 0x8800ff; size = 6.0; speed = 35; intensity = 10; life = 4.0; type = 'purple'; announceSkillText("虛式「茈」", "#aa00ff"); triggerCinematic('purple_fire', 1.5); timeScale = 0.1; screenShake = 3.5; }
                 projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(size, 32, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending })));
@@ -1570,50 +1627,36 @@
             projectiles.push({ mesh: projGroup, dir: dir, speed: speed, type: type, life: life, size: size, color: color });
         } 
 
-        // --- 新增：反轉術式極限爆發特效 ---
         function spawnRCTExplosion(pos) {
             const group = new THREE.Group();
             group.position.copy(pos);
 
-            // 核心：純白無瑕、液態般高密度的光芒
             const coreGeo = new THREE.SphereGeometry(1.8, 32, 32);
             const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
             const core = new THREE.Mesh(coreGeo, coreMat);
             group.add(core);
 
-            // 外暈：神聖的淺藍白色溢出
             const glowMat = new THREE.MeshBasicMaterial({ color: 0xddffff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
             const glow = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), glowMat);
             group.add(glow);
 
             scene.add(group);
 
-            // 炸裂無數白色雷電 (排斥反應)
             createWhiteLightning(pos, 7);
-
-            // 蒸騰的白色汽化煙霧
             createEvaporationParticles(pos, 0xffffff, 80);
-
-            // 強力純白衝擊波與衝擊閃光
             createShockwave(pos, 0xffffff, 35);
             createImpactFlash(pos, 0xffffff);
-
-            // 空間扭曲
             addDistortion(pos, 0.4, 1.2, 0.5);
 
-            // 極致的定格與螢幕震動，表現能量灌注的沉重感
             triggerHitStop(120); 
             screenShake = 6.0;
 
-            // 淡出群組
             const dummyLight = new THREE.PointLight(0xffffff, 8, 25);
             group.add(dummyLight);
             impactFlashes.push({ group: group, light: dummyLight, meshes: [core, glow], life: 0.7 });
         }
 
-        // --- 新增：白色閃電特效 ---
         function createWhiteLightning(pos, scale = 5) {
-            // 全螢幕純白反轉閃爍
             const overlay = document.getElementById('domain-overlay');
             overlay.style.transition = 'none';
             overlay.style.background = '#ffffff'; 
@@ -1624,7 +1667,6 @@
                 overlay.style.opacity = '0';
             }, 60);
 
-            // 生成網狀白色雷電
             for(let i=0; i<12; i++) {
                 const pGeo = new THREE.BufferGeometry();
                 const points = [];
@@ -1638,12 +1680,10 @@
                 }
                 pGeo.setFromPoints(points);
                 
-                // 核心白線
                 const line = new THREE.Line(pGeo, new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 4 }));
                 scene.add(line);
                 spatialGlitches.push({ mesh: line, life: 0.35 }); 
                 
-                // 淺藍白外暈
                 const lineBlue = new THREE.Line(pGeo, new THREE.LineBasicMaterial({ color: 0x88ffff, transparent: true, opacity: 0.8 }));
                 lineBlue.scale.setScalar(1.2);
                 scene.add(lineBlue);
@@ -1651,13 +1691,11 @@
             }
         }
 
-        // --- 新增：向上蒸發的汽化粒子 ---
         function createEvaporationParticles(targetPos, colorHex, count) {
             const pGeo = new THREE.BufferGeometry(); const positions = []; const velocities = [];
             for (let i = 0; i < count; i++) {
                 const offset = new THREE.Vector3((Math.random() - 0.5) * 3.5, (Math.random() - 0.5) * 3.5, (Math.random() - 0.5) * 3.5);
                 const startPos = new THREE.Vector3().addVectors(targetPos, offset); positions.push(startPos.x, startPos.y, startPos.z);
-                // 給予強烈的向上初速度
                 const vel = new THREE.Vector3((Math.random()-0.5)*8.0, 15.0 + Math.random()*20.0, (Math.random()-0.5)*8.0); velocities.push(vel.x, vel.y, vel.z);
             }
             pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -1665,37 +1703,38 @@
             scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 0.8 });
         }
 
-        // --- 優化：咒言目標地的「言靈重壓」特效 (純淨高壓衝擊) ---
         function spawnWordPressure(pos) {
             const group = new THREE.Group(); group.position.copy(pos);
             
-            // 瞬間下壓的無形重力衝擊柱 (微透明，無色彩傾向)
             const col = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 20, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
             col.position.y = 10; group.add(col);
             
-            // 添加一個貼地的擴散光環，強調向下壓的力道
             const groundRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 4.0, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }));
             groundRing.rotation.x = -Math.PI / 2; groundRing.position.y = 0.1; group.add(groundRing);
             
             scene.add(group);
             
-            // 地面產生強烈的圓形碎裂
             spawnCrackAndShatter(pos, 0x333333, 8, false);
             spawnPhysicsDebris(pos, 0x222222, 25);
             
-            // 借用 impactFlashes 淡出重力柱與光環
             const dummyLight = new THREE.PointLight(0x000000, 0, 0);
             impactFlashes.push({ group: group, light: dummyLight, meshes: [col, groundRing], life: 0.4 }); 
             
-            // 假人受到重壓定格
             if (pos.distanceTo(dummyPhysics.position) < 4.0) {
                 dummyPhysics.velX = 0; dummyPhysics.velZ = 0;
-                dummyPhysics.angleX = Math.PI / 4; // 假人被往下壓彎
+                dummyPhysics.angleX = Math.PI / 4; 
                 triggerHitStop(80);
-                // 使用強烈的白光衝擊
                 createImpactFlash(pos.clone().setY(1.0), 0xffffff);
-                screenShake = 3.5; // 命中時引發強烈震動
+                screenShake = 3.5; 
             }
+
+            // 壓制小怪
+            checkMobHits(pos, 6.0, new THREE.Vector3(0,0,0), 0, 'purple'); // 壓制不擊退
+            activeMobs.forEach(mob => {
+                if(pos.distanceTo(mob.mesh.position) < 6.0) {
+                    mob.attackTimer = 1.0; // 封鎖動作
+                }
+            });
         }
 
         function createGravitationalRings(parentGroup, size, colorHex) {
@@ -1731,15 +1770,12 @@
             scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 1.0 });
         }
 
-        // --- 新增：生成咒言禁錮的重力場與墨黑鎖鏈 ---
         function spawnPressureField(pos) {
             const group = new THREE.Group(); group.position.copy(pos);
             
-            // 半透明的沉重暗紫重力場
             const col = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 20, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x050011, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
             col.position.y = 10; group.add(col);
             
-            // 爆裂出的實體墨黑咒力鎖鏈，增加交錯與狂暴感
             for(let i=0; i<16; i++) {
                 const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.05, 10 + Math.random()*8, 5), new THREE.MeshBasicMaterial({ color: 0x010101 }));
                 chain.position.set((Math.random()-0.5)*6, 1.5 + (Math.random()-0.5)*5, (Math.random()-0.5)*6);
@@ -1748,17 +1784,14 @@
             }
             scene.add(group);
             
-            // 更強烈的定點空間扭曲
             activeDistortions.push({ pos: pos.clone().setY(1.5), strength: 1.5, radius: 8.0, life: 0.8, maxLife: 0.8 });
             createImpactFlash(pos.clone().setY(1.5), 0xaa00ff);
             spawnCrackAndShatter(pos, 0x110022, 10, false);
             
-            // 增加碎裂岩石與藍色粒子噴發 (Shattering rocks & glowing blue particles)
             spawnPhysicsDebris(pos, 0x1a1a20, 30);
             spawnPhysicsDebris(pos, 0x010101, 20);
             createParticles(pos.clone().setY(1.5), 0x0088ff, 40, 35);
             
-            // 借用 impactFlashes 的生命週期系統來平滑淡出重力場與鎖鏈
             const dummyLight = new THREE.PointLight(0x000000, 0, 0);
             impactFlashes.push({ group: group, light: dummyLight, meshes: [col, ...group.children], life: 0.8 });
             
@@ -1771,7 +1804,6 @@
 
         function highlightUI(id) { const el = document.getElementById(id); if(el) { el.classList.add('active'); setTimeout(() => el.classList.remove('active'), 250); } }
 
-        // --- 新增：咒力火焰著色器 (Flame Shader) ---
         function getFlameShaderMaterial(colorHex) {
             return new THREE.ShaderMaterial({
                 uniforms: {
@@ -1786,9 +1818,7 @@
                     void main() {
                         vUv = uv;
                         vec3 pos = position;
-                        // 強化火焰向上拉伸與波動的感覺
                         float noise = sin(pos.y * 10.0 + u_time * 15.0) * cos(pos.x * 10.0 + u_time * 10.0) * 0.08;
-                        // 頂部形變更大，模擬不穩定的火舌
                         pos.x += normal.x * noise * (pos.y + 1.0);
                         pos.z += normal.z * noise * (pos.y + 1.0);
                         pos.y += abs(noise) * 0.5;
@@ -1807,76 +1837,60 @@
                     varying vec3 vViewPosition;
 
                     void main() {
-                        // UV 動態流動 (模擬火焰向上飄移)
                         vec2 waveUv = vUv;
-                        waveUv.y -= u_time * 3.0; // 加快火焰流動速度
-                        waveUv.x += sin(waveUv.y * 8.0 + u_time * 2.0) * 0.08; // 更明顯的左右搖曳
+                        waveUv.y -= u_time * 3.0; 
+                        waveUv.x += sin(waveUv.y * 8.0 + u_time * 2.0) * 0.08; 
                         
-                        // 產生疊加的三角函數雜訊，模擬火焰的撕裂與層次感
                         float fire1 = sin(waveUv.x * 20.0) * sin(waveUv.y * 10.0);
-                        fire1 = pow(abs(fire1), 0.6); // 降低次方讓火焰更飽滿
+                        fire1 = pow(abs(fire1), 0.6); 
                         
                         float fire2 = sin(waveUv.x * 35.0 - u_time * 6.0) * cos(waveUv.y * 25.0 + u_time * 4.0);
                         fire2 = abs(fire2);
                         
                         float combinedFire = (fire1 + fire2) * 0.5;
 
-                        // 邊緣發光 (Fresnel 效果)，讓咒力像是一層膜包覆在身體外
                         vec3 normal = normalize(vNormal);
                         vec3 viewDir = normalize(vViewPosition);
                         float rim = 1.0 - max(dot(viewDir, normal), 0.0);
-                        rim = smoothstep(0.4, 1.0, rim); // 強化邊緣對比
+                        rim = smoothstep(0.4, 1.0, rim); 
                         
-                        // 核心高光
                         float core = pow(combinedFire, 1.5);
                         
-                        // 頂部漸隱，避免幾何體頂端出現生硬的切邊
                         float topFade = smoothstep(1.0, 0.4, vUv.y);
                         
-                        // 結合透明度與顏色，強化核心亮度與邊緣的對比
                         float finalAlpha = clamp((core * 1.5 + rim) * topFade, 0.0, 1.0);
-                        // 核心混入白色，表現高溫與高密度能量
                         vec3 finalColor = mix(u_color, vec3(1.0), core * 0.6); 
                         
                         gl_FragColor = vec4(finalColor, finalAlpha);
                     }
                 `,
                 transparent: true,
-                blending: THREE.AdditiveBlending, // 疊加混合產生強光
+                blending: THREE.AdditiveBlending, 
                 depthWrite: false,
                 side: THREE.DoubleSide
             });
         }
 
-        // --- 更新：啟動招式六 咒力覆蓋 ---
         function activateCoating() {
             if (!gameStarted || skillCharge.active) return;
             
-            // --- 修改：如果咒力覆蓋已經展開，再次點擊將觸發關閉邏輯 ---
             if (coatingState.active) {
                 clearCoating();
-                if (isCDEnabled) cooldowns.coating = cdMax.coating; // 關閉後才開始計算冷卻
+                if (isCDEnabled) cooldowns.coating = cdMax.coating; 
                 announceSkillText("解除強化", "#cccccc");
                 return;
             }
 
-            // 開啟邏輯：檢查冷卻
             if (isCDEnabled && cooldowns.coating > 0) return;
 
             clearCoating();
             coatingState.active = true;
-            // 移除了自動結束的時間限制，變為永久開關
             
             const area = document.getElementById('coating-area').value;
-            
-            // 根據角色設定符合動畫設定的咒力顏色
-            // 五條：平滑的蒼青色 | 乙骨：不穩定且濃稠的狂暴粉紫色
             const colorHex = selectedCharacter === 'gojo' ? 0x00ffff : 0xff11aa;
             
-            // 動態創建貼合物體的發光幾何體
             function addAura(parentGroup, geo, offsetY = 0) {
                 if(!parentGroup) return;
-                // 使用全新的火焰波動著色器材質
                 const auraMat = getFlameShaderMaterial(colorHex);
                 const aura = new THREE.Mesh(geo, auraMat);
                 aura.position.y = offsetY;
@@ -1884,7 +1898,6 @@
                 coatingState.auras.push({ mesh: aura, baseScale: 1.0 });
             }
 
-            // 微調幾何體的尺寸，讓火焰有更多向上燃燒的空間
             const armGeo = new THREE.CylinderGeometry(0.20, 0.15, 1.1, 16, 8); 
             const legGeo = new THREE.CylinderGeometry(0.22, 0.15, 1.2, 16, 8);
             const torsoGeo = new THREE.CylinderGeometry(0.75, 0.55, 1.85, 16, 8);
@@ -1904,11 +1917,10 @@
                 if (selectedCharacter === 'yuta' && katanaGroup) {
                     addAura(katanaGroup, weaponGeo, 0.9);
                 } else {
-                    addAura(leftArmGroup, armGeo, -0.45); addAura(rightArmGroup, armGeo, -0.45); // 五條無武器，退回強化手部
+                    addAura(leftArmGroup, armGeo, -0.45); addAura(rightArmGroup, armGeo, -0.45); 
                 }
             }
 
-            // 變更UI按鈕顯示為可解除
             document.querySelector('#skill-coating .skill-name').innerHTML = selectedCharacter === 'gojo' ? "解除<br>強化" : "解除<br>覆蓋";
 
             let skillName = selectedCharacter === 'gojo' ? "咒力強化" : "咒力解放";
@@ -1916,7 +1928,7 @@
             announceSkillText(`${skillName} · ${textMapping[area]}`, colorHex === 0x00ffff ? "#00ffff" : "#ff11aa");
             
             createShockwave(playerGroup.position, colorHex, 20);
-            triggerCinematic('teleport', 0.2); // 藉用短暫瞬移視角的張力感
+            triggerCinematic('teleport', 0.2); 
         }
 
         function onKeyDown(event) {
@@ -1927,8 +1939,8 @@
             if (k === '3') { highlightUI('skill-purple'); shootProjectile('purple'); }
             if (k === '4') { highlightUI('skill-domain'); activateDomain(); }
             if (k === '5') { highlightUI('skill-teleport'); teleport(); }
-            if (k === '6') { highlightUI('skill-coating'); activateCoating(); } // 招式六快捷鍵
-            if (k === 'q') { dash(); } // Q鍵觸發無冷卻衝刺
+            if (k === '6') { highlightUI('skill-coating'); activateCoating(); } 
+            if (k === 'q') { dash(); } 
             if (k === 'z') { highlightUI('skill-melee'); castMelee(); }
             if (k === 'r') { restoreCity(); }
             if (k === 'f') { cameraMode = cameraMode === 3 ? 1 : (cameraMode === 1 ? 2 : 3); }
@@ -1972,19 +1984,16 @@
         function activateDomain() {
             if (!gameStarted || skillCharge.active) return;
             
-            // --- 修改：如果領域已經展開，再次點擊將觸發關閉邏輯 ---
             if (domainState.active) {
-                // 確保只有在領域完全成型(climax)時才能解除，避免動畫錯亂
                 if (domainState.phase === 'climax') {
                     domainState.phase = 'fade';
-                    if (isCDEnabled) cooldowns.domain = cdMax.domain; // 關閉領域後才開始計算冷卻
+                    if (isCDEnabled) cooldowns.domain = cdMax.domain; 
                     announceSkillText("解除領域", "#cccccc");
                 }
                 return;
             }
 
             if (isCDEnabled && cooldowns.domain > 0) return;
-            // 注意：移除了這裡原本的 cooldowns.domain = cdMax.domain，改在解除時計算
             
             domainState = { active: true, timer: 0, phase: 'prelude', group: new THREE.Group(), infoParticles: null };
             domainState.group.position.copy(playerGroup.position); scene.add(domainState.group);
@@ -1993,12 +2002,12 @@
             
             if (selectedCharacter === 'gojo') {
                 document.getElementById('title-text').innerText = "領域展開 · 無量空處"; 
-                document.querySelector('#skill-domain .skill-name').innerHTML = "解除<br>領域"; // 提示玩家可以關閉
+                document.querySelector('#skill-domain .skill-name').innerHTML = "解除<br>領域"; 
                 announceSkillText("領域展開「無量空處」", "#aa00ff");
                 isAttacking = true; attackType = 6; attackTimer = 1.0; 
             } else {
                 document.getElementById('title-text').innerText = "領域展開 · 真贗相愛"; 
-                document.querySelector('#skill-domain .skill-name').innerHTML = "解除<br>領域"; // 提示玩家可以關閉
+                document.querySelector('#skill-domain .skill-name').innerHTML = "解除<br>領域"; 
                 announceSkillText("領域展開「真贗相愛」", "#ffffff");
                 isAttacking = true; attackType = 13; attackTimer = 1.0; 
             }
@@ -2013,7 +2022,6 @@
             domainState.timer += delta; let t = domainState.timer;
 
             if (selectedCharacter === 'gojo') {
-                // --- 五條悟：無量空處 ---
                 if (t > 0.5 && domainState.phase === 'prelude') {
                     domainState.phase = 'burst';
                     const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '1'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
@@ -2052,26 +2060,31 @@
                         for (let i = 0; i < posArr.length; i += 3) { posArr[i+1] -= 20 * delta; if (posArr[i+1] < -100) posArr[i+1] = 100; posArr[i] += Math.sin(time*2 + i)*0.5; }
                         domainState.infoParticles.geometry.attributes.position.needsUpdate = true;
                     }
+
+                    // 領域必中效果：對場上所有小怪造成傷害
+                    if (Math.random() < 0.1) {
+                        activeMobs.forEach(mob => {
+                            createImpactFlash(mob.mesh.position.clone().setY(1), 0x00ffff);
+                            mob.health -= 5 * delta; // 持續削弱
+                            mob.attackTimer = 2.0; // 封鎖攻擊
+                        });
+                    }
                 }
 
-                // --- 修改：移除時間自動結束的限制，改由玩家主動觸發的 phase === 'fade' 來關閉 ---
                 if (domainState.phase === 'fade') {
                     const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '0.8'; setTimeout(() => { overlay.style.opacity = '0'; }, 200);
                     scene.remove(domainState.group); domainState.active = false;
                     scene.background = new THREE.Color(0x080a12); scene.fog.color = new THREE.Color(0x080a12);
                     toggleCityVisibility(true);
                     document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟"; 
-                    document.querySelector('#skill-domain .skill-name').innerHTML = "無量<br>空處"; // 恢復技能名稱
+                    document.querySelector('#skill-domain .skill-name').innerHTML = "無量<br>空處"; 
                     domainState.phase = 'none';
                 }
 
             } else if (selectedCharacter === 'yuta') {
-                // --- 乙骨憂太：真贗相愛 ---
                 if (t > 0.3 && domainState.phase === 'prelude') {
                     domainState.phase = 'water_drop';
-                    // 空間因極度壓縮塌陷
                     addDistortion(playerGroup.position.clone().setY(2), -0.8, 6.0, 0.4);
-                    // 憑空凝結巨大的黑紫咒力水滴
                     domainState.yutaDrop = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 16), new THREE.MeshBasicMaterial({color: 0x1a0033}));
                     domainState.yutaDrop.position.copy(playerGroup.position);
                     domainState.yutaDrop.position.y += 3.5;
@@ -2079,13 +2092,11 @@
                 }
 
                 if (t > 0.3 && t < 0.7 && domainState.yutaDrop) {
-                    // 水滴滴落與拉伸
                     domainState.yutaDrop.position.y -= 15 * delta;
                     domainState.yutaDrop.scale.set(0.6, 1.5, 0.6);
                     if (domainState.yutaDrop.position.y <= 0) {
                         domainState.yutaDrop.visible = false;
                         createShockwave(domainState.yutaDrop.position, 0x110022, 120);
-                        // 墨黑色水面瞬間擴散
                         domainState.yutaGround = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({color: 0x050508, roughness: 0.1, metalness: 0.9}));
                         domainState.yutaGround.rotation.x = -Math.PI / 2;
                         domainState.yutaGround.position.y = 0.05;
@@ -2097,9 +2108,7 @@
                     domainState.phase = 'burst';
                     const overlay = document.getElementById('domain-overlay'); overlay.style.background = '#000000'; overlay.style.opacity = '1'; setTimeout(() => { overlay.style.opacity = '0'; overlay.style.background = '#ffffff'; }, 200);
                     screenShake = 6.0;
-                    domainFreeze = true; // 爆發瞬間定格場景
 
-                    // 巨大球體結界與黑色藤蔓般的注連繩
                     const dome = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 32), new THREE.MeshBasicMaterial({ color: 0x010101, side: THREE.BackSide }));
                     const vines = new THREE.Mesh(new THREE.SphereGeometry(148, 24, 24), new THREE.MeshBasicMaterial({ color: 0x111111, wireframe: true, transparent: true, opacity: 0.8 }));
 
@@ -2110,13 +2119,11 @@
                 if (t > 1.2 && domainState.phase === 'burst') {
                     domainState.phase = 'climax';
 
-                    // 轉化為銀灰色金屬光澤的荒涼廢墟
                     if (domainState.yutaGround) {
                         domainState.yutaGround.material.color.setHex(0x555566);
                         domainState.yutaGround.material.roughness = 0.4;
                     }
 
-                    // 生成密密麻麻的武士刀與不同顏色的微弱流光
                     const bladeGeo = new THREE.BoxGeometry(0.12, 1.8, 0.2); bladeGeo.translate(0, 0.9, 0);
                     const swordMat = new THREE.MeshBasicMaterial({color: 0xffffff}); 
                     domainState.yutaSwords = new THREE.InstancedMesh(bladeGeo, swordMat, 1500);
@@ -2125,15 +2132,13 @@
 
                     for (let i = 0; i < 1500; i++) {
                         dummyObj.position.set((Math.random()-0.5)*280, 0, (Math.random()-0.5)*280);
-                        dummyObj.rotation.set((Math.random()-0.5)*0.8, Math.random()*Math.PI*2, (Math.random()-0.5)*0.8); // 無規律插入地面
+                        dummyObj.rotation.set((Math.random()-0.5)*0.8, Math.random()*Math.PI*2, (Math.random()-0.5)*0.8); 
                         dummyObj.updateMatrix();
                         domainState.yutaSwords.setMatrixAt(i, dummyObj.matrix);
-                        // 賦予每把刀不同的暗沉發光色
                         domainState.yutaSwords.setColorAt(i, new THREE.Color(auraColors[Math.floor(Math.random()*auraColors.length)]).multiplyScalar(0.7));
                     }
                     domainState.group.add(domainState.yutaSwords);
 
-                    // 慘白的天幕景觀：縱橫交錯的白色注連繩與角隱
                     domainState.yutaSky = new THREE.Group();
                     for(let i=0; i<25; i++) {
                         const knot = new THREE.Mesh(new THREE.TorusGeometry(20 + Math.random()*60, 3 + Math.random()*5, 16, 32), new THREE.MeshBasicMaterial({color: 0xdddddd}));
@@ -2143,13 +2148,11 @@
                     }
                     domainState.group.add(domainState.yutaSky);
 
-                    // 必中特效：巨大半透明白色光瀑
                     domainState.sureHit = new THREE.Group();
                     const waterfallCyl = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 150, 24, 1, true), new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, side: THREE.DoubleSide}));
                     waterfallCyl.position.y = 75;
                     domainState.sureHit.add(waterfallCyl);
 
-                    // 光瀑中瘋狂下墜的術式符文暴雨
                     const runeGeo = new THREE.BufferGeometry();
                     const runePos = [];
                     for(let i=0; i<300; i++) {
@@ -2167,46 +2170,48 @@
 
                     if (domainState.yutaSky) {
                         domainState.yutaSky.children.forEach((c, idx) => {
-                            // 注連繩緩慢蠕動
                             c.rotation.x += 0.1 * delta * (idx % 2 === 0 ? 1 : -1);
                             c.rotation.y += 0.05 * delta;
                         });
                     }
                     
                     if (domainState.sureHit) {
-                        // 光瀑死死籠罩目標 (假人)
                         domainState.sureHit.position.x = dummyPhysics.position.x;
                         domainState.sureHit.position.z = dummyPhysics.position.z;
 
-                        // 符文高速下墜
                         if (domainState.sureHitRunes) {
                             const posArr = domainState.sureHitRunes.geometry.attributes.position.array;
                             for (let i = 0; i < posArr.length; i += 3) {
-                                posArr[i+1] -= 100 * delta; // 暴雨般的下墜速度
+                                posArr[i+1] -= 100 * delta; 
                                 if (posArr[i+1] < 0) posArr[i+1] = 150;
                             }
                             domainState.sureHitRunes.geometry.attributes.position.needsUpdate = true;
                         }
 
-                        // 目標受到必中壓制
-                        dummyPhysics.velY = -10; // 持續下壓
-                        dummyPhysics.angleX = Math.PI / 4; // 壓彎身軀
+                        dummyPhysics.velY = -10; 
+                        dummyPhysics.angleX = Math.PI / 4; 
                         if(Math.random() < 0.35) {
-                            createImpactFlash(dummyPhysics.position.clone().setY(2), 0xffffff); // 密集的光芒炸裂傷害
+                            createImpactFlash(dummyPhysics.position.clone().setY(2), 0xffffff); 
                         }
-                        // 稍微降低持續震動的幅度，以免長時間在領域內暈眩
+                        
+                        // 領域內小怪全數受到持續壓制與光刃傷害
+                        activeMobs.forEach(mob => {
+                            if(Math.random() < 0.2) createImpactFlash(mob.mesh.position.clone().setY(1), 0xffffff);
+                            mob.health -= 20 * delta; // 高額持續傷害
+                            mob.attackTimer = 1.0; 
+                        });
+
                         screenShake = Math.max(screenShake, 0.8); 
                     }
                 }
 
-                // --- 修改：移除時間自動結束的限制，改由玩家主動觸發的 phase === 'fade' 來關閉 ---
                 if (domainState.phase === 'fade') {
                     const overlay = document.getElementById('domain-overlay'); overlay.style.opacity = '1'; overlay.style.background = '#ffffff'; setTimeout(() => { overlay.style.opacity = '0'; }, 300);
                     scene.remove(domainState.group); domainState.active = false;
                     scene.background = new THREE.Color(0x080a12); scene.fog.color = new THREE.Color(0x080a12);
                     toggleCityVisibility(true);
                     document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "乙骨 憂太";
-                    document.querySelector('#skill-domain .skill-name').innerHTML = "真贗<br>相愛"; // 恢復技能名稱
+                    document.querySelector('#skill-domain .skill-name').innerHTML = "真贗<br>相愛"; 
                     domainState.phase = 'none';
                 }
             }
@@ -2227,11 +2232,10 @@
                 if (cooldowns[key] > 0) { cooldowns[key] -= rawDelta; if (cooldowns[key] <= 0) cooldowns[key] = 0; updateCooldownUI(key, cooldowns[key], cdMax[key]); }
             });
 
-            // 連擊判定視窗倒數
             if (meleeComboWindow > 0) {
                 meleeComboWindow -= delta;
                 if (meleeComboWindow <= 0) {
-                    meleeComboStep = 0; // 若時間內未輸入則重置連擊
+                    meleeComboStep = 0; 
                     if (isCDEnabled) cooldowns.melee = cdMax.melee;
                 }
             }
@@ -2287,20 +2291,95 @@
             }
 
             const baseTargetY = (playerGroup.userData.targetY || 0) + 1.8;
-            // 只有五條悟會漂浮，乙骨腳踏實地
             const floatOffset = selectedCharacter === 'gojo' ? Math.sin(time * 3) * 0.2 : 0;
             playerGroup.position.y = THREE.MathUtils.lerp(playerGroup.position.y, baseTargetY + floatOffset, 10 * delta);
 
             if ((keys.w || keys.s || keys.a || keys.d) && Math.random() < 0.25 && !skillCharge.active && playerGroup.position.y < 3) { 
                 let ripplePos = playerGroup.position.clone(); ripplePos.y = 0.05; 
                 if (selectedCharacter === 'gojo') {
-                    spawnBarrierRipple(ripplePos); // 五條的無下限水波紋
+                    spawnBarrierRipple(ripplePos); 
                 } else {
-                    createParticles(ripplePos, 0x555555, 3, 2); // 乙骨的普通腳步揚塵
+                    createParticles(ripplePos, 0x555555, 3, 2); 
                 }
             }
 
             if (!skillCharge.active) { dummyAttackTimer -= delta; if (dummyAttackTimer <= 0) { dummyShootAttack(); dummyAttackTimer = 3.0; } }
+
+            // --- 新增：小怪 AI 與邏輯更新 ---
+            for (let i = activeMobs.length - 1; i >= 0; i--) {
+                let mob = activeMobs[i];
+                let pPos = playerGroup.position;
+                let mPos = mob.mesh.position;
+                
+                // 物理位移與阻力
+                mPos.x += mob.velX * delta;
+                mPos.z += mob.velZ * delta;
+                mob.velX *= 0.85; // 地面摩擦力
+                mob.velZ *= 0.85;
+
+                // 邊界限制
+                mPos.x = THREE.MathUtils.clamp(mPos.x, -390, 390);
+                mPos.z = THREE.MathUtils.clamp(mPos.z, -390, 390);
+
+                let distToPlayer = mPos.distanceTo(new THREE.Vector3(pPos.x, 0, pPos.z));
+                let dirToPlayer = new THREE.Vector3().subVectors(new THREE.Vector3(pPos.x, 0, pPos.z), new THREE.Vector3(mPos.x, 0, mPos.z)).normalize();
+
+                let isBlockedByLimitless = false;
+
+                // 檢測五條悟的無下限阻擋
+                if (selectedCharacter === 'gojo' && distToPlayer < 3.0 && !domainState.active) {
+                    isBlockedByLimitless = true;
+                    // 無下限排斥力，強行停止並微幅推開小怪
+                    mob.velX -= dirToPlayer.x * 12 * delta;
+                    mob.velZ -= dirToPlayer.z * 12 * delta;
+                    
+                    // 撞擊無下限產生波紋
+                    if (Math.random() < 0.15) {
+                        let hitSurfacePos = mPos.clone().add(dirToPlayer.clone().multiplyScalar(1.0));
+                        hitSurfacePos.y += 0.8;
+                        spawnBarrierRipple(hitSurfacePos);
+                    }
+                }
+
+                if (mob.health <= 0) {
+                    // 小怪死亡特效
+                    createParticles(mPos.clone().setY(1.0), 0xaa00ff, 25, 20);
+                    createSpatialGlitch(mPos.clone().setY(1.0));
+                    scene.remove(mob.mesh);
+                    activeMobs.splice(i, 1);
+                    continue;
+                }
+
+                if (!isBlockedByLimitless && mob.attackTimer <= 0) {
+                    if (distToPlayer > 1.8) {
+                        // 朝向玩家移動
+                        mPos.x += dirToPlayer.x * mob.speed * delta;
+                        mPos.z += dirToPlayer.z * mob.speed * delta;
+                        mob.mesh.lookAt(pPos.x, mPos.y, pPos.z);
+                        
+                        // 跑步動畫
+                        mob.arms[0].rotation.x = Math.sin(time * 12) * 0.6;
+                        mob.arms[1].rotation.x = -Math.sin(time * 12) * 0.6;
+                    } else {
+                        // 進入攻擊範圍，發動攻擊
+                        mob.attackTimer = 1.5; // 攻擊冷卻
+                        mob.arms[1].rotation.x = -Math.PI / 1.5; // 舉手揮拳
+                        
+                        // 對玩家造成傷害/震動
+                        screenShake = Math.max(screenShake, 1.2);
+                        createImpactFlash(pPos.clone().setY(1.5), 0xff1133);
+                        spawnCrackAndShatter(pPos, 0xff1133, 1.5, true);
+                    }
+                }
+                
+                // 攻擊冷卻與手臂回正
+                if (mob.attackTimer > 0) {
+                    mob.attackTimer -= delta;
+                    if (mob.attackTimer < 1.2) {
+                        mob.arms[1].rotation.x = THREE.MathUtils.lerp(mob.arms[1].rotation.x, 0, 10 * delta);
+                    }
+                }
+            }
 
             if(barrierGrid && !domainState.active) { barrierGrid.rotation.y += 0.01 * delta; }
             if(barrierWall && !domainState.active) { barrierWall.rotation.y -= 0.005 * delta; }
@@ -2330,13 +2409,11 @@
                     let distToGojo = ep.mesh.position.distanceTo(new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 1.0, playerGroup.position.z));
                     
                     if (selectedCharacter === 'gojo') {
-                        // 五條的無下限：緩速並彈開
                         if (distToGojo < 3.0) {
                             ep.speed *= Math.pow(0.1, delta * 10); ep.mesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08, (Math.random()-0.5)*0.08));
                             if (Math.random() < 0.15 && ep.speed > 0.5) { let hitSurfacePos = ep.mesh.position.clone().sub(playerGroup.position).normalize().multiplyScalar(1.6).add(playerGroup.position); hitSurfacePos.y += 0.8; spawnBarrierRipple(hitSurfacePos); }
                         }
                     } else {
-                        // 乙骨沒有無下限，直接被擊中
                         if (distToGojo < 1.5) {
                             ep.life = 0; screenShake = 2.0; createImpactFlash(ep.mesh.position, 0xff1133);
                             spawnCrackAndShatter(ep.mesh.position, 0xff1133, 2.0, true);
@@ -2456,9 +2533,7 @@
                         }
                     }
                 } else if (skillCharge.type === 'space_rend') {
-                    // --- 乙骨招式 1：空間抓握與撕扯 ---
                     let handPos = new THREE.Vector3(0, 1.2, 2.0).applyMatrix4(playerGroup.matrixWorld);
-                    // 負數的扭曲強度 (Strength) 會讓畫面產生向內「吸附/揉捏」的摺疊錯覺
                     if (Math.random() < 0.6) {
                         addDistortion(handPos, -0.35, 0.6, 0.15);
                         createSpatialGlitch(handPos);
@@ -2481,21 +2556,16 @@
                 }
             }
 
-            // --- 更新：處理咒力火焰覆蓋的動態特效 ---
             if (coatingState.active) {
-                // 移除了倒數計時，改為無限持續
                 const colorHex = selectedCharacter === 'gojo' ? 0x00ffff : 0xff11aa;
                 coatingState.auras.forEach(a => {
-                    // 更新 Shader 內部時間，驅動火焰燃燒動畫
                     if(a.mesh.material.uniforms) {
                         a.mesh.material.uniforms.u_time.value = time;
                     }
 
-                    // 讓覆蓋特效基底像呼吸一樣微小脈動，稍微增強垂直拉伸感
                     const scale = a.baseScale + Math.sin(time * 20) * 0.04;
                     a.mesh.scale.set(scale, scale * 1.05, scale); 
 
-                    // 不斷向外溢出咒力粒子 (模擬向上飄的火星)
                     let spillRate = selectedCharacter === 'gojo' ? 0.25 : 0.45;
                     if (Math.random() < spillRate) {
                         let worldPos = new THREE.Vector3();
@@ -2504,7 +2574,6 @@
                         worldPos.y += (Math.random() - 0.5) * (1.5 * a.mesh.scale.y);
                         worldPos.z += (Math.random() - 0.5) * (0.8 * a.mesh.scale.z);
                         
-                        // 乙骨的微粒混雜一些暗紫色，五條則是純青白色
                         let pColor = selectedCharacter === 'gojo' ? 0x00ffff : (Math.random()>0.3 ? 0xff11aa : 0xaa00ff);
                         spawnEnergyParticles(worldPos, 1, pColor, 8); 
                     }
@@ -2532,7 +2601,6 @@
                     if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/1.3, 50*delta);
                 }
                 else if (attackType === 8) { 
-                    // 三段連擊 第二段
                     rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, Math.PI/4, 40*delta); 
                     rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/4, 40*delta); 
                     leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, Math.PI/6, 40*delta);
@@ -2543,7 +2611,6 @@
                     if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/2, 50*delta);
                 }
                 else if (attackType === 9) { 
-                    // 三段連擊 第三段 (重劈)
                     rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.5, 50*delta); 
                     rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, 0, 50*delta); 
                     leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.5, 50*delta);
@@ -2554,25 +2621,21 @@
                     if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/1.1, 60*delta);
                 }
                 else if (attackType === 10) {
-                    // --- 乙骨招式 1：動作軌跡演繹 ---
-                    let progress = 1.0 - attackTimer; // 0 到 1.0 的進度
+                    let progress = 1.0 - attackTimer; 
                     if (progress < 0.3) {
-                        // 階段 1：雙手向前虛空抓握 (爪狀)
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.8, 30*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.8, 30*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/10, 30*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/10, 30*delta);
                         if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/2, 20*delta);
                     } else if (progress < 0.6) {
-                        // 階段 2：如同拉扯沉重布料，雙臂後拽，身體大幅扭轉
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/4, 25*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/4, 25*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/3.5, 25*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, -Math.PI/3.5, 25*delta);
-                        playerGroup.rotation.y += 18 * delta; // 身體順勢扭動
+                        playerGroup.rotation.y += 18 * delta; 
                         playerGroup.rotation.z = THREE.MathUtils.lerp(playerGroup.rotation.z, -Math.PI/12, 10*delta);
                     } else {
-                        // 階段 3：由爪轉掌，爆發性向前推出
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.5, 50*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.5, 50*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/16, 50*delta);
@@ -2582,24 +2645,19 @@
                     }
                 }
                 else if (attackType === 11) {
-                    // --- 乙骨招式 2：咒言動作軌跡 ---
                     let progress = 1.0 - (attackTimer / 1.2);
                     if (progress < 0.4) {
-                        // 階段 1：單手舉至唇邊 (拿著擴音器)，壓低重心蓄力
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.1, 20*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/3.5, 20*delta);
                         playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, -Math.PI/12, 10*delta);
                         
-                        // 下盤微蹲
                         playerGroup.position.y = THREE.MathUtils.lerp(playerGroup.position.y, (playerGroup.userData.targetY || 0) + 1.4, 10*delta);
                         leftLegGroup.rotation.x = THREE.MathUtils.lerp(leftLegGroup.rotation.x, -Math.PI/8, 10*delta);
                         rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, -Math.PI/8, 10*delta);
                     } else {
-                        // 階段 2：大喊吐出指令，頭部與手臂瞬間前傾定格
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.5, 30*delta);
                         playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, Math.PI/8, 30*delta);
                         
-                        // 身體緊繃彈回直立
                         playerGroup.position.y = THREE.MathUtils.lerp(playerGroup.position.y, (playerGroup.userData.targetY || 0) + 1.8, 20*delta);
                         leftLegGroup.rotation.x = THREE.MathUtils.lerp(leftLegGroup.rotation.x, 0, 20*delta);
                         rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, 0, 20*delta);
@@ -2607,55 +2665,44 @@
                     if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/3, 15*delta);
                 }
                 else if (attackType === 12) {
-                    // --- 乙骨招式 3：反轉術式輸出 (近身肉搏) ---
                     let progress = 1.0 - attackTimer;
                     if (progress < 0.3) {
-                        // 突進時雙手成爪狀向前探出
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.5, 30*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.5, 30*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/8, 30*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/8, 30*delta);
                         
-                        // 身體極度前傾
                         playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, Math.PI/6, 20*delta); 
                     } else {
-                        // 扣住目標，全身重量與力量下壓灌注
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 20*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2, 20*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/16, 20*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/16, 20*delta);
                         
-                        // 身體深壓，重心強行下放
                         playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, Math.PI/3.5, 20*delta); 
                         playerGroup.position.y = THREE.MathUtils.lerp(playerGroup.position.y, (playerGroup.userData.targetY || 0) + 1.2, 10*delta); 
                     }
                     if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/2, 20*delta);
                 }
                 else if (attackType === 13) {
-                    // --- 新增：乙骨招式 4：領域展開「真贗相愛」結印動作 ---
                     let progress = 1.0 - attackTimer;
                     if (progress < 0.4) {
-                        // 階段 1：雙手抬至胸前，手指交錯結印
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.6, 25*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/1.6, 25*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/5, 25*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, -Math.PI/5, 25*delta);
-                        // 將刀收至後方或放下
                         if(katanaGroup) katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI/2, 20*delta);
                     } else {
-                        // 階段 2：雙手合十向兩側猛然拉開
                         rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 35*delta);
                         leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2, 35*delta);
                         rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/3, 35*delta);
                         leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/3, 35*delta);
                         
-                        // 身體緊繃微震
                         playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, -Math.PI/16, 20*delta);
                     }
                 }
             } else {
                 isAttacking = false;
-                // 隱藏擴音器
                 if (selectedCharacter === 'yuta') {
                     let megaphone = leftArmGroup.getObjectByName("megaphone");
                     if(megaphone) megaphone.visible = false;
@@ -2665,7 +2712,6 @@
                 leftLegGroup.rotation.x = THREE.MathUtils.lerp(leftLegGroup.rotation.x, 0, 10*delta); rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, 0, 10*delta);
                 playerGroup.rotation.x = THREE.MathUtils.lerp(playerGroup.rotation.x, 0, 10*delta);
 
-                // 乙骨平常持刀的待機姿勢
                 if (selectedCharacter === 'yuta') {
                     rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/8, 10*delta); 
                     rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/16, 10*delta); 
@@ -2674,7 +2720,6 @@
                     rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, 0, 10*delta); 
                 }
                 
-                // 恢復武士刀基礎握姿
                 if (katanaGroup) {
                     katanaGroup.rotation.x = THREE.MathUtils.lerp(katanaGroup.rotation.x, Math.PI / 3.5, 10*delta);
                     katanaGroup.rotation.z = THREE.MathUtils.lerp(katanaGroup.rotation.z, 0, 10*delta);
@@ -2683,7 +2728,6 @@
                 if ((keys.w || keys.s || keys.a || keys.d) && !skillCharge.active) {
                     leftLegGroup.rotation.x = Math.sin(time*12)*0.6; rightLegGroup.rotation.x = -Math.sin(time*12)*0.6; 
                     leftArmGroup.rotation.x = -Math.sin(time*12)*0.6; 
-                    // 跑步時右手持刀微舉
                     rightArmGroup.rotation.x = selectedCharacter === 'yuta' ? -Math.PI/6 + Math.sin(time*12)*0.2 : Math.sin(time*12)*0.6;
                 }
             }
@@ -2732,10 +2776,9 @@
 
                 if (p.mesh.position.distanceTo(dummyPhysics.position) < (p.size + 1.2)) {
                     let pushForce = 35; if (p.type === 'purple') pushForce = 90; if (p.type === 'blue') pushForce = -20;  
-                    if (p.type === 'space_rend') pushForce = 70; // 空間折曲的高擊退力
+                    if (p.type === 'space_rend') pushForce = 70; 
                     dummyPhysics.velX = p.dir.z * pushForce; dummyPhysics.velZ = -p.dir.x * pushForce;
                     
-                    // 完全獨立判定：若是宇守羅彈，觸發專屬的天空碎裂
                     if (p.type === 'space_rend') {
                         spawnSpaceShatter(p.mesh.position, 12);
                     } else {
@@ -2758,7 +2801,6 @@
                     else if (p.type === 'red') { screenShake = 1.5; spawnCrackAndShatter(p.mesh.position, p.color, 5, false); } 
                     else if (p.type === 'blue') { screenShake = 2.0; createImplosionParticles(p.mesh.position, 25, 0x00ffff, 80); spawnCrackAndShatter(p.mesh.position, p.color, 5, false); }
                     else if (p.type === 'space_rend') { 
-                        // 完全獨立判定：壽命結束炸開時，同樣觸發專屬的天空碎裂
                         screenShake = 3.5; createShockwave(p.mesh.position, 0xffffff, 40); addDistortion(p.mesh.position, 0.6, 1.5, 0.5); triggerHitStop(40);
                         spawnSpaceShatter(p.mesh.position, 12); 
                     }
@@ -2776,11 +2818,9 @@
                 if (ps.life <= 0 && ps.mesh !== domainState.infoParticles) { scene.remove(ps.mesh); particles.splice(i, 1); }
             }
 
-            // --- 優化：處理咒言實體音波漣漪的擴散 ---
             for (let i = speechRings.length - 1; i >= 0; i--) {
-                let r = speechRings[i]; r.scale += delta * 45; r.life -= delta; // 加快音波擴散速度 (30 -> 45)
+                let r = speechRings[i]; r.scale += delta * 45; r.life -= delta; 
                 r.mesh.scale.set(r.scale, r.scale, r.scale);
-                // 調整漸隱邏輯，讓音波消散得更自然
                 r.mesh.children.forEach(c => { c.material.opacity = (r.life / 0.6) * 0.8; });
                 if (r.life <= 0) { scene.remove(r.mesh); speechRings.splice(i, 1); }
             }
@@ -2790,18 +2830,15 @@
                 if (g.life <= 0) { scene.remove(g.mesh); spatialGlitches.splice(i, 1); }
             }
             
-            // --- 新增：處理空間碎裂 (Space Shatter) 的漸隱與動畫 ---
             for (let i = spaceShatters.length - 1; i >= 0; i--) {
                 let s = spaceShatters[i];
                 s.life -= delta;
                 let progress = s.life / s.maxLife;
                 
-                // 裂痕會極度輕微地擴張，模擬空間繃斷後的鬆弛
                 s.group.scale.setScalar(1 + (1 - progress) * 0.1); 
                 
                 s.meshes.forEach(m => {
                     if (m.material) {
-                        // 讓中心的黑洞碎片保持一定的透明度，發光線條則漸漸消散
                         m.material.opacity = progress * (m.material.color.getHex() === 0x020005 ? 0.9 : 1.0); 
                     }
                 });
