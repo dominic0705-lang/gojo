@@ -187,7 +187,6 @@
                 <option value="weapon">武器 (鋒芒收束)</option>
             </select>
 
-            <!-- 新增：小怪生成選單 -->
             <label style="font-size: 12px; color:#aaa; margin-top:5px;">咒靈測試 (小怪)</label>
             <div style="display: flex; gap: 5px;">
                 <button id="btn-spawn-mob" class="action-btn" style="flex:1;">召喚咒靈</button>
@@ -219,12 +218,12 @@
         let flickeringSigns = [], cursedResiduals = [], streetLights = []; let barrierWall = null, barrierGrid = null;
         let speechRings = []; 
         let spaceShatters = []; 
+        let blueVortices = []; // 新增：出力最大「蒼」重力奇異點黑洞陣列
         
         let dummyGroup, dummyTorso, dummyHead;
         let dummyPhysics = { position: new THREE.Vector3(0, 0, -15), angleX: 0, angleZ: 0, velX: 0, velZ: 0, springK: 12.0, damping: 2.5 };
         let dummyAttackTimer = 3.0; 
         
-        // --- 新增：小怪系統變數 ---
         let activeMobs = [];
         const MAX_MOBS = 30;
 
@@ -246,7 +245,7 @@
 
         const MAX_ENERGY_PARTICLES = 1000;
         let instancedEnergy; let energyData = [];
-        const MAX_DEBRIS = 500;
+        const MAX_DEBRIS = 600;
         let instancedDebris; let debrisData = [];
         const _dummyMatrix = new THREE.Matrix4();
         const _dummyPosition = new THREE.Vector3();
@@ -259,7 +258,7 @@
         
         let meleeComboStep = 0; let meleeComboWindow = 0;
 
-        const cdMax = { blue: 3.0, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5, coating: 15.0 };
+        const cdMax = { blue: 4.5, red: 5.0, purple: 15.0, domain: 30.0, teleport: 2.0, melee: 0.5, coating: 15.0 };
         const cooldowns = { blue: 0, red: 0, purple: 0, domain: 0, teleport: 0, melee: 0, coating: 0 };
         let coatingState = { active: false, timer: 0, auras: [] };
 
@@ -290,7 +289,7 @@
         function updateCharacterUI() {
             if (selectedCharacter === 'gojo') {
                 document.getElementById('title-text').innerText = "五條 悟";
-                document.querySelector('#skill-blue .skill-name').innerHTML = "蒼";
+                document.querySelector('#skill-blue .skill-name').innerHTML = "最大<br>「蒼」";
                 document.querySelector('#skill-red .skill-name').innerHTML = "赫";
                 document.querySelector('#skill-purple .skill-name').innerHTML = "虛式 茈";
                 document.querySelector('#skill-domain .skill-name').innerHTML = domainState.active ? "解除<br>領域" : "無量<br>空處";
@@ -330,19 +329,16 @@
         document.getElementById('skill-melee').onclick = () => castMelee();
         document.getElementById('restore-btn').addEventListener('click', restoreCity);
 
-        // --- 新增：小怪系統按鈕事件 ---
         document.getElementById('btn-spawn-mob').addEventListener('click', spawnMob);
         document.getElementById('btn-clear-mob').addEventListener('click', clearAllMobs);
 
-        // --- 新增：小怪生成邏輯 ---
+        // --- 小怪系統 ---
         function spawnMob() {
             if (!gameStarted || activeMobs.length >= MAX_MOBS) return;
 
             const mobGroup = new THREE.Group();
-            
-            // 簡約的咒靈模型 (深邃紫黑)
             const bodyMat = new THREE.MeshStandardMaterial({color: 0x110022, roughness: 0.9, metalness: 0.1});
-            const glowMat = new THREE.MeshBasicMaterial({color: 0xaa00ff}); // 眼睛/核心發光
+            const glowMat = new THREE.MeshBasicMaterial({color: 0xaa00ff}); 
 
             const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), bodyMat);
             torso.position.y = 0.6;
@@ -360,7 +356,6 @@
 
             mobGroup.add(torso, head, eyeL, eyeR, armL, armR);
 
-            // 在玩家周圍隨機生成
             const angle = Math.random() * Math.PI * 2;
             const dist = 15 + Math.random() * 15;
             let spawnX = playerGroup.position.x + Math.cos(angle) * dist;
@@ -371,17 +366,17 @@
             mobGroup.position.set(spawnX, 0, spawnZ);
             scene.add(mobGroup);
 
-            // 出現特效
             createParticles(mobGroup.position.clone().setY(1), 0xaa00ff, 15);
             createSpatialGlitch(mobGroup.position.clone().setY(1));
 
             activeMobs.push({
                 mesh: mobGroup,
-                health: 100, // 兩拳或一發技能可擊殺
-                speed: 3 + Math.random() * 3, // 移動速度
+                health: 120,
+                speed: 3 + Math.random() * 3,
                 arms: [armL, armR],
                 attackTimer: 0,
-                velX: 0, velZ: 0
+                velX: 0, velY: 0, velZ: 0,
+                isPulled: false
             });
         }
 
@@ -393,25 +388,21 @@
             activeMobs = [];
         }
 
-        // --- 新增：小怪受擊通用判定 ---
         function checkMobHits(hitPos, radius, dir, pushForce, skillType) {
             activeMobs.forEach(mob => {
-                // 如果在範圍內
                 if (mob.mesh.position.distanceTo(new THREE.Vector3(hitPos.x, mob.mesh.position.y, hitPos.z)) < radius + 0.8) {
-                    mob.health -= 60; // 固定傷害，通常2下或1發重擊死
+                    mob.health -= (skillType === 'blue_suction' ? 30 : 60); 
                     
-                    // 擊退力道 (依據攻擊方向)
                     mob.velX = dir.x * pushForce;
                     mob.velZ = dir.z * pushForce;
 
                     let fxColor = 0xaa00ff;
-                    if(skillType==='blue') fxColor = 0x00aaff;
+                    if(skillType==='blue' || skillType==='blue_suction') fxColor = 0x00aaff;
                     if(skillType==='red') fxColor = 0xff0033;
                     if(skillType==='purple' || skillType==='slash') fxColor = 0xffffff;
                     
                     createImpactFlash(mob.mesh.position.clone().setY(1), fxColor);
                     
-                    // 根據受擊類型產生額外特效
                     if(skillType === 'slash') {
                         spawnCrackAndShatter(mob.mesh.position, 0x110022, 2, false);
                     }
@@ -419,12 +410,19 @@
             });
         }
 
-        // --- 場景修復功能 ---
         function restoreCity() {
             if (!gameStarted) return;
             announceSkillText("時間回溯 · 場景修復", "#00ffcc");
             createShockwave(playerGroup.position, 0x00ffcc, 200);
             
+            for (let i = cityElements.length - 1; i >= 0; i--) {
+                const el = cityElements[i];
+                if (el.userData && el.userData.isGouge) {
+                    scene.remove(el);
+                    cityElements.splice(i, 1);
+                }
+            }
+
             cityElements.forEach(el => {
                 if (el.userData && (el.userData.isCollapsing || el.userData.isRestoring)) {
                     el.userData.isCollapsing = false;
@@ -504,7 +502,6 @@
                             }
                         }
                         
-                        // 加入色差分離 (Chromatic Aberration) 模擬高壓環境與鏡頭失真
                         float caStrength = totalStrength * 0.06;
                         vec2 uvR = uv + distort * (1.0 + caStrength);
                         vec2 uvG = uv + distort;
@@ -800,8 +797,6 @@
             cityElements.forEach(el => { el.visible = visible; }); ground.visible = visible; 
             if(barrierWall) barrierWall.visible = visible; if(barrierGrid) barrierGrid.visible = visible;
             flickeringSigns.forEach(s => { s.mesh.visible = visible; }); cursedResiduals.forEach(r => { r.mesh.visible = visible; });
-            
-            // 領域時隱藏小怪
             activeMobs.forEach(m => { m.mesh.visible = visible; });
         }
 
@@ -866,7 +861,25 @@
             scene.add(crackGroup); crackDecals.push({ mesh: crackGroup, life: 0.3, colorHex: colorHex, size: size, pos: pos.clone() });
         }
 
-        // --- 新增：專屬「宇守羅彈」的空間碎裂 (玻璃裂痕) 視覺特效 ---
+        function spawnGroundGouge(pos, size = 3.6) {
+            const gougeGeo = new THREE.CircleGeometry(size, 16);
+            const gougeMat = new THREE.MeshBasicMaterial({ 
+                color: 0x07080c, 
+                depthWrite: false, 
+                polygonOffset: true, 
+                polygonOffsetFactor: -1 
+            });
+            const gouge = new THREE.Mesh(gougeGeo, gougeMat);
+            gouge.rotation.x = -Math.PI / 2;
+            gouge.position.set(pos.x, 0.08, pos.z);
+            scene.add(gouge);
+            
+            spawnCrackAndShatter(pos, 0x00ccff, size * 1.4, false);
+            
+            gouge.userData = { isGouge: true, isSolid: false };
+            cityElements.push(gouge);
+        }
+
         function spawnSpaceShatter(pos, size) {
             const group = new THREE.Group();
             group.position.copy(pos);
@@ -943,7 +956,7 @@
             let spawned = 0;
             for(let i=0; i<MAX_DEBRIS && spawned < count; i++) {
                 if(!debrisData[i].active) {
-                    debrisData[i].active = true; debrisData[i].life = 0.7; debrisData[i].initialLife = 0.7;
+                    debrisData[i].active = true; debrisData[i].life = 0.8; debrisData[i].initialLife = 0.8;
                     debrisData[i].pos = pos.clone().add(new THREE.Vector3((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5));
                     let burstSpeed = 40 + Math.random() * 25;
                     debrisData[i].vel = new THREE.Vector3((Math.random()-0.5)*burstSpeed, Math.random()*burstSpeed*0.5 + 5, (Math.random()-0.5)*burstSpeed);
@@ -1327,20 +1340,21 @@
                     if (dist < radius + Math.max(el.userData.halfW || 5, el.userData.halfD || 5) * 1.2) {
                         el.userData.isCollapsing = true; el.userData.shakeTimer = 0.8; 
                         let debrisColor = 0x222222; 
-                        if (skillType === 'blue') debrisColor = 0x0044aa; if (skillType === 'red') debrisColor = 0xaa0033; if (skillType === 'purple') debrisColor = 0x5500aa;
+                        if (skillType === 'blue' || skillType === 'blue_suction') debrisColor = 0x0044aa; 
+                        if (skillType === 'red') debrisColor = 0xaa0033; 
+                        if (skillType === 'purple') debrisColor = 0x5500aa;
                         if (skillType === 'slash') debrisColor = 0xffffff; 
 
-                        spawnCrackAndShatter(impactPos, debrisColor, (skillType === 'purple' || skillType === 'slash') ? 12 : 5, true);
+                        spawnCrackAndShatter(impactPos, debrisColor, (skillType === 'purple' || skillType === 'blue_suction' || skillType === 'slash') ? 12 : 5, true);
                         createImpactFlash(impactPos, debrisColor);
-                        let collapseFactor = (skillType === 'purple') ? 0.2 : 0.7; 
+                        let collapseFactor = (skillType === 'purple' || skillType === 'blue_suction') ? 0.15 : 0.7; 
                         el.userData.targetScaleY = (el.userData.initialScaleY || el.scale.y) * collapseFactor; 
                         el.userData.targetPosY = (el.userData.initialPosY || el.position.y) * collapseFactor;
                         if(el.userData.roofGroup) el.userData.roofGroup.visible = false; 
-                        screenShake = Math.max(screenShake, skillType === 'purple' ? 4.0 : 1.8);
+                        screenShake = Math.max(screenShake, (skillType === 'purple' || skillType === 'blue_suction') ? 4.0 : 1.8);
                     }
                 }
             }
-            // 新增：順便檢測對小怪的打擊
             checkMobHits(impactPos, radius, dir, (skillType === 'purple' ? 80 : 35), skillType);
         }
 
@@ -1377,7 +1391,6 @@
                     spawnCrackAndShatter(hitPos, 0x222222, 2.0, false);
                 }
                 checkBuildingHits(hitPos, 2.5, dir, 'melee');
-                // 對小怪進行近戰傷害檢測
                 checkMobHits(hitPos, 3.0, dir, 30, 'melee');
 
             } else if (selectedCharacter === 'yuta') {
@@ -1459,6 +1472,83 @@
             }
         }
 
+        // --- 核心復刻：第27話「術式順轉 出力最大『蒼』」重力奇異點黑洞建立 ---
+        function createMaximumOutputBlueVortex(centerPos) {
+            const vortexGroup = new THREE.Group();
+            vortexGroup.position.copy(centerPos);
+            vortexGroup.position.y = Math.max(1.5, vortexGroup.position.y);
+
+            // 1. 純黑事象地平面 (Event Horizon Core)
+            const coreMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(2.0, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0x000208 })
+            );
+            vortexGroup.add(coreMesh);
+
+            // 2. 超高密吸積電弧球光暈 (Corona & Accretion Halo)
+            const haloMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(2.8, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending })
+            );
+            vortexGroup.add(haloMesh);
+
+            // 3. 多重高速旋轉吸積環 (Accretion Disks)
+            const rings = [];
+            const ringColors = [0x00ffff, 0x0088ff, 0x33ddff];
+            for (let i = 0; i < 3; i++) {
+                const ringGeo = new THREE.TorusGeometry(3.5 + i * 1.5, 0.12, 8, 48);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: ringColors[i],
+                    transparent: true,
+                    opacity: 0.75,
+                    blending: THREE.AdditiveBlending
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / (2 + i * 0.4);
+                ring.rotation.y = (i * Math.PI) / 3;
+                vortexGroup.add(ring);
+                rings.push(ring);
+            }
+
+            // 4. 重力線螺旋體 (Gravitational Line Streamers)
+            const streamPoints = [];
+            for (let i = 0; i < 60; i++) {
+                let ang = (i / 60) * Math.PI * 8;
+                let r = 2.0 + (i / 60) * 12.0;
+                streamPoints.push(new THREE.Vector3(Math.cos(ang) * r, (Math.random() - 0.5) * 2, Math.sin(ang) * r));
+            }
+            const streamGeom = new THREE.BufferGeometry().setFromPoints(streamPoints);
+            const streamLine = new THREE.Line(streamGeom, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending }));
+            vortexGroup.add(streamLine);
+
+            // 5. 光源
+            const light = new THREE.PointLight(0x00aaff, 12, 45);
+            vortexGroup.add(light);
+
+            scene.add(vortexGroup);
+
+            // 地面破壞裂痕與初始深痕
+            spawnGroundGouge(centerPos, 5.0);
+            createShockwave(centerPos, 0x00aaff, 35);
+            addDistortion(centerPos, -0.6, 2.5, 3.5); 
+
+            blueVortices.push({
+                group: vortexGroup,
+                core: coreMesh,
+                halo: haloMesh,
+                rings: rings,
+                streamLine: streamLine,
+                light: light,
+                pos: centerPos.clone(),
+                duration: 4.5, // 延長操控時間，方便玩家滑鼠導引巡迴破壞
+                maxDuration: 4.5,
+                radius: 28.0, 
+                pullForce: 52.0,
+                gougeTimer: 0,
+                debrisChunks: [] // 被吸起來的地面石塊與柏油碎片
+            });
+        }
+
         function shootProjectile(type) {
             if (!gameStarted || skillCharge.active) return;
             
@@ -1470,6 +1560,25 @@
                 isAttacking = true; attackType = 10; attackTimer = 1.0; 
                 skillCharge = { active: true, time: 0, maxTime: 0.6, type: 'space_rend' };
                 triggerCinematic('blue', 1.0);
+                return;
+            }
+
+            if (selectedCharacter === 'gojo' && type === 'blue') {
+                if (isCDEnabled && cooldowns.blue > 0) return;
+                if (isCDEnabled) cooldowns.blue = cdMax.blue;
+                
+                // 第27話經典台詞演出：術式順轉 出力最大「蒼」，提示滑鼠導引
+                announceSkillText("術式順轉 出力最大「蒼」[移動滑鼠操控黑洞]", "#00d4ff");
+                triggerCinematic('blue', 1.2);
+                isAttacking = true; attackType = 5; attackTimer = 0.8;
+                screenShake = 3.0;
+
+                // 五條悟手部聚集蒼藍高壓電弧
+                createSpatialGlitch(playerGroup.position.clone().setY(2));
+                createParticles(playerGroup.position.clone().setY(2), 0x00ffff, 30, 15);
+                addDistortion(playerGroup.position.clone().setY(2), 0.3, 0.8, 0.4);
+
+                skillCharge = { active: true, time: 0, maxTime: 0.45, type: 'blue_max' };
                 return;
             }
 
@@ -1526,13 +1635,6 @@
                 toggleCityVisibility(false); return; 
             }
 
-            if (type === 'blue') {
-                if (isCDEnabled) cooldowns.blue = cdMax.blue;
-                announceSkillText("術式順轉「蒼」", "#00aaff"); triggerCinematic('blue', 1.0); isAttacking = true; attackType = 5; attackTimer = 0.6;
-                skillCharge = { active: true, time: 0, maxTime: 0.3, type: 'blue' };
-                toggleCityVisibility(false); return;
-            }
-
             if (type === 'red') {
                 if (isCDEnabled) cooldowns.red = cdMax.red;
                 announceSkillText("術式反轉「赫」", "#ff0033"); triggerCinematic('red', 1.0); isAttacking = true; attackType = 4; attackTimer = 0.5; screenShake = 1.5;
@@ -1547,11 +1649,36 @@
             let target = intersects.length > 0 ? intersects[0].point : new THREE.Vector3(0, 0, -100).applyMatrix4(camera.matrixWorld);
             const dir = new THREE.Vector3().subVectors(target, playerGroup.position); dir.y = 0; dir.normalize(); 
 
+            // 如果是五條悟的「出力最大 蒼」：高速射出奇異點核心，並在碰撞處或目標點建立強大黑洞重力場
+            if (type === 'blue_max') {
+                const targetPoint = intersects.length > 0 ? intersects[0].point : playerGroup.position.clone().add(dir.clone().multiplyScalar(25));
+                
+                // 產生高壓極速射向目標點的重力種子
+                const seedGroup = new THREE.Group();
+                seedGroup.position.copy(playerGroup.position).add(new THREE.Vector3(0, 1.5, 0));
+                
+                const seedCore = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshBasicMaterial({ color: 0x000511 }));
+                const seedGlow = new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending }));
+                seedGroup.add(seedCore, seedGlow);
+                scene.add(seedGroup);
+
+                projectiles.push({
+                    mesh: seedGroup,
+                    dir: new THREE.Vector3().subVectors(targetPoint, seedGroup.position).normalize(),
+                    speed: 90, // 高速破空
+                    type: 'blue_singularity_seed',
+                    life: 1.2,
+                    targetPos: targetPoint.clone(),
+                    size: 1.2,
+                    color: 0x00ffff
+                });
+                return;
+            }
+
             const projGroup = new THREE.Group(); projGroup.position.copy(playerGroup.position); projGroup.position.y += 1.0; 
             let color, size, speed, intensity, life;
 
-            if (type === 'blue') { color = 0x0044ff; size = 2.0; speed = 35; intensity = 5; life = 2.5; createGravitationalRings(projGroup, size, 0x00ffff); } 
-            else if (type === 'red') { createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5; color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; } 
+            if (type === 'red') { createShockwave(playerGroup.position, 0xff0022, 40); screenShake = 2.5; color = 0xff0022; size = 0.8; speed = 80; intensity = 6; life = 1.5; } 
             if (type === 'space_rend') {
                 color = 0xffffff; size = 3.5; speed = 60; intensity = 0; life = 1.2;
                 createShockwave(playerGroup.position, 0xffffff, 50);
@@ -1600,7 +1727,6 @@
                     dummyPhysics.velX = dir.z * 40; dummyPhysics.velZ = -dir.x * 40;
                     dummyPhysics.angleX = Math.PI / 4; 
                 } else {
-                    // 若沒抓到假人，嘗試抓取小怪
                     activeMobs.forEach(mob => {
                         if (playerGroup.position.distanceTo(mob.mesh.position) < 4.0) {
                             hitPos = mob.mesh.position.clone(); hitPos.y += 1.0;
@@ -1618,7 +1744,7 @@
             if (type !== 'space_rend' && type !== 'cursed_speech') {
                 if (type === 'purple_fire') { color = 0x8800ff; size = 6.0; speed = 35; intensity = 10; life = 4.0; type = 'purple'; announceSkillText("虛式「茈」", "#aa00ff"); triggerCinematic('purple_fire', 1.5); timeScale = 0.1; screenShake = 3.5; }
                 projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(size, 32, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending })));
-                const coreColor = (type === 'purple') ? 0x010101 : (type === 'blue' ? 0x00ffff : 0xffffff);
+                const coreColor = (type === 'purple') ? 0x010101 : 0xffffff;
                 projGroup.add(new THREE.Mesh(new THREE.SphereGeometry(type === 'purple' ? size*0.6 : size*0.4, 16, 16), new THREE.MeshBasicMaterial({color: coreColor})));
                 if (quality === 'ultra') projGroup.add(new THREE.PointLight(color, intensity, size * 25));
             }
@@ -1728,11 +1854,10 @@
                 screenShake = 3.5; 
             }
 
-            // 壓制小怪
-            checkMobHits(pos, 6.0, new THREE.Vector3(0,0,0), 0, 'purple'); // 壓制不擊退
+            checkMobHits(pos, 6.0, new THREE.Vector3(0,0,0), 0, 'purple');
             activeMobs.forEach(mob => {
                 if(pos.distanceTo(mob.mesh.position) < 6.0) {
-                    mob.attackTimer = 1.0; // 封鎖動作
+                    mob.attackTimer = 1.0;
                 }
             });
         }
@@ -1768,38 +1893,6 @@
             pGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
             const particleMesh = new THREE.Points(pGeo, new THREE.PointsMaterial({color: colorHex, size: 1.8, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false}));
             scene.add(particleMesh); particles.push({ mesh: particleMesh, velocities: velocities, life: 1.0 });
-        }
-
-        function spawnPressureField(pos) {
-            const group = new THREE.Group(); group.position.copy(pos);
-            
-            const col = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 20, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x050011, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
-            col.position.y = 10; group.add(col);
-            
-            for(let i=0; i<16; i++) {
-                const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.05, 10 + Math.random()*8, 5), new THREE.MeshBasicMaterial({ color: 0x010101 }));
-                chain.position.set((Math.random()-0.5)*6, 1.5 + (Math.random()-0.5)*5, (Math.random()-0.5)*6);
-                chain.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-                group.add(chain);
-            }
-            scene.add(group);
-            
-            activeDistortions.push({ pos: pos.clone().setY(1.5), strength: 1.5, radius: 8.0, life: 0.8, maxLife: 0.8 });
-            createImpactFlash(pos.clone().setY(1.5), 0xaa00ff);
-            spawnCrackAndShatter(pos, 0x110022, 10, false);
-            
-            spawnPhysicsDebris(pos, 0x1a1a20, 30);
-            spawnPhysicsDebris(pos, 0x010101, 20);
-            createParticles(pos.clone().setY(1.5), 0x0088ff, 40, 35);
-            
-            const dummyLight = new THREE.PointLight(0x000000, 0, 0);
-            impactFlashes.push({ group: group, light: dummyLight, meshes: [col, ...group.children], life: 0.8 });
-            
-            if (pos.distanceTo(dummyPhysics.position) < 5.0) {
-                dummyPhysics.velX = 0; dummyPhysics.velZ = 0;
-                triggerHitStop(80);
-                createBlackFlash(pos.clone().setY(1.5), 8);
-            }
         }
 
         function highlightUI(id) { const el = document.getElementById(id); if(el) { el.classList.add('active'); setTimeout(() => el.classList.remove('active'), 250); } }
@@ -2061,12 +2154,11 @@
                         domainState.infoParticles.geometry.attributes.position.needsUpdate = true;
                     }
 
-                    // 領域必中效果：對場上所有小怪造成傷害
                     if (Math.random() < 0.1) {
                         activeMobs.forEach(mob => {
                             createImpactFlash(mob.mesh.position.clone().setY(1), 0x00ffff);
-                            mob.health -= 5 * delta; // 持續削弱
-                            mob.attackTimer = 2.0; // 封鎖攻擊
+                            mob.health -= 5 * delta;
+                            mob.attackTimer = 2.0; 
                         });
                     }
                 }
@@ -2077,7 +2169,7 @@
                     scene.background = new THREE.Color(0x080a12); scene.fog.color = new THREE.Color(0x080a12);
                     toggleCityVisibility(true);
                     document.getElementById('ui-layer').classList.remove('domain-ui-mode'); document.getElementById('title-text').innerText = "五條 悟"; 
-                    document.querySelector('#skill-domain .skill-name').innerHTML = "無量<br>空處"; 
+                    document.querySelector('#skill-domain .skill-name').innerHTML = "最大<br>「蒼」"; 
                     domainState.phase = 'none';
                 }
 
@@ -2194,10 +2286,9 @@
                             createImpactFlash(dummyPhysics.position.clone().setY(2), 0xffffff); 
                         }
                         
-                        // 領域內小怪全數受到持續壓制與光刃傷害
                         activeMobs.forEach(mob => {
                             if(Math.random() < 0.2) createImpactFlash(mob.mesh.position.clone().setY(1), 0xffffff);
-                            mob.health -= 20 * delta; // 高額持續傷害
+                            mob.health -= 20 * delta;
                             mob.attackTimer = 1.0; 
                         });
 
@@ -2305,19 +2396,203 @@
 
             if (!skillCharge.active) { dummyAttackTimer -= delta; if (dummyAttackTimer <= 0) { dummyShootAttack(); dummyAttackTimer = 3.0; } }
 
-            // --- 新增：小怪 AI 與邏輯更新 ---
+            // --- 出力最大「蒼」黑洞吸積與全場吸引力場更新 ---
+            for (let vIdx = blueVortices.length - 1; vIdx >= 0; vIdx--) {
+                const vortex = blueVortices[vIdx];
+                vortex.duration -= delta;
+                const lifeProgress = 1.0 - (vortex.duration / vortex.maxDuration);
+
+                // 1. 滑鼠實時牽引黑洞奇異點 (跟隨滑鼠移動)
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const mouseRay = new THREE.Raycaster();
+                mouseRay.setFromCamera(mouse, camera);
+                const groundHit = new THREE.Vector3();
+                if (mouseRay.ray.intersectPlane(groundPlane, groundHit)) {
+                    groundHit.x = THREE.MathUtils.clamp(groundHit.x, -380, 380);
+                    groundHit.z = THREE.MathUtils.clamp(groundHit.z, -380, 380);
+                    groundHit.y = 2.0; // 緊貼地表撕扯地面
+                    vortex.pos.lerp(groundHit, 7.5 * delta);
+                    vortex.group.position.copy(vortex.pos);
+                }
+
+                // 五條悟身體與結印手勢持續鎖定導引黑洞位置
+                if (selectedCharacter === 'gojo') {
+                    const toVortex = new THREE.Vector3().subVectors(vortex.pos, playerGroup.position);
+                    playerGroup.rotation.y = THREE.MathUtils.lerp(playerGroup.rotation.y, Math.atan2(toVortex.x, toVortex.z), 15 * delta);
+                    rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI / 2.2, 20 * delta);
+                    leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI / 2.2, 20 * delta);
+                    isAttacking = true;
+                    attackTimer = 0.25;
+                }
+
+                // 核心與吸積盤動畫
+                vortex.core.scale.setScalar(1.0 + Math.sin(time * 30) * 0.15);
+                vortex.halo.scale.setScalar(1.2 + Math.sin(time * 25) * 0.2);
+                vortex.rings[0].rotation.z += 12 * delta;
+                vortex.rings[1].rotation.x += 16 * delta;
+                vortex.rings[2].rotation.y += 18 * delta;
+                vortex.streamLine.rotation.y -= 25 * delta;
+
+                // 2. 隨黑洞移動實時撕裂地表軌跡，並把柏油石塊碎片拔地吸起
+                vortex.gougeTimer += delta;
+                if (vortex.gougeTimer > 0.07) {
+                    vortex.gougeTimer = 0;
+                    spawnGroundGouge(vortex.pos, 3.8);
+
+                    // 從地面翻起 3~5 塊地表岩石破片
+                    for (let k = 0; k < 3; k++) {
+                        const rockGeo = new THREE.DodecahedronGeometry(0.3 + Math.random() * 0.45, 0);
+                        const rockMat = new THREE.MeshStandardMaterial({ 
+                            color: Math.random() > 0.4 ? 0x22242b : 0x111215, 
+                            roughness: 0.9 
+                        });
+                        const rock = new THREE.Mesh(rockGeo, rockMat);
+
+                        const spawnAngle = Math.random() * Math.PI * 2;
+                        const spawnDist = 3.0 + Math.random() * 10.0;
+                        rock.position.set(
+                            vortex.pos.x + Math.cos(spawnAngle) * spawnDist,
+                            0.1,
+                            vortex.pos.z + Math.sin(spawnAngle) * spawnDist
+                        );
+                        scene.add(rock);
+
+                        vortex.debrisChunks.push({
+                            mesh: rock,
+                            dist: spawnDist,
+                            angle: spawnAngle,
+                            height: 0.1,
+                            angularSpeed: 6.0 + Math.random() * 8.0,
+                            riseSpeed: 3.5 + Math.random() * 4.0,
+                            spiralInSpeed: 2.8 + Math.random() * 3.5,
+                            rotSpeed: new THREE.Vector3((Math.random()-0.5)*15, (Math.random()-0.5)*15, (Math.random()-0.5)*15)
+                        });
+                    }
+                }
+
+                // 3. 更新被吸起的地面碎石：拔地螺旋上升並往黑洞核心吸積
+                for (let rIdx = vortex.debrisChunks.length - 1; rIdx >= 0; rIdx--) {
+                    const chunk = vortex.debrisChunks[rIdx];
+                    chunk.angle += chunk.angularSpeed * delta;
+                    chunk.dist -= chunk.spiralInSpeed * delta;
+                    chunk.height += chunk.riseSpeed * delta;
+
+                    chunk.mesh.position.x = vortex.pos.x + Math.cos(chunk.angle) * chunk.dist;
+                    chunk.mesh.position.z = vortex.pos.z + Math.sin(chunk.angle) * chunk.dist;
+                    chunk.mesh.position.y = Math.min(vortex.pos.y + 1.2, chunk.height);
+
+                    chunk.mesh.rotation.x += chunk.rotSpeed.x * delta;
+                    chunk.mesh.rotation.y += chunk.rotSpeed.y * delta;
+                    chunk.mesh.rotation.z += chunk.rotSpeed.z * delta;
+
+                    // 當碎塊吸入黑洞事象地平面時被重力潮汐粉碎成藍色咒力粒子
+                    if (chunk.dist <= 1.8) {
+                        createParticles(chunk.mesh.position, 0x00d4ff, 5, 8);
+                        scene.remove(chunk.mesh);
+                        chunk.mesh.geometry.dispose();
+                        chunk.mesh.material.dispose();
+                        vortex.debrisChunks.splice(rIdx, 1);
+                    }
+                }
+
+                // 連續向心吸扯粒子與空間電弧
+                if (Math.random() < 0.75) {
+                    createImplosionParticles(vortex.pos, vortex.radius, 0x00d4ff, 8);
+                }
+                if (Math.random() < 0.3) {
+                    createSpatialGlitch(vortex.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*10, (Math.random()-0.5)*5, (Math.random()-0.5)*10)));
+                }
+
+                screenShake = Math.max(screenShake, 1.8 + Math.sin(time * 20) * 0.8);
+
+                // 4. 吸扯小怪
+                activeMobs.forEach(mob => {
+                    const mobPos = mob.mesh.position;
+                    const dist = mobPos.distanceTo(vortex.pos);
+                    if (dist < vortex.radius) {
+                        const pullDir = new THREE.Vector3().subVectors(vortex.pos, mobPos).normalize();
+                        const pullStrength = Math.min(65.0, (vortex.pullForce / Math.max(1.5, dist * 0.4)));
+                        
+                        mob.velX += pullDir.x * pullStrength * delta * 5;
+                        mob.velZ += pullDir.z * pullStrength * delta * 5;
+                        
+                        // 螺旋向心漩渦效果
+                        mob.mesh.position.x += -pullDir.z * pullStrength * 0.6 * delta;
+                        mob.mesh.position.z += pullDir.x * pullStrength * 0.6 * delta;
+                        
+                        // 接近中心時將其捲至半空中旋轉粉碎
+                        if (dist < 8.0) {
+                            mob.mesh.position.y = THREE.MathUtils.lerp(mob.mesh.position.y, vortex.pos.y + Math.sin(time * 15 + dist) * 2.0, 5 * delta);
+                            mob.mesh.rotation.y += 20 * delta;
+                            mob.mesh.rotation.x += 15 * delta;
+                            mob.health -= 70 * delta; // 重力潮汐撕扯傷害
+                        }
+                    }
+                });
+
+                // 5. 吸扯假人 (Dummy)
+                const dummyDist = dummyPhysics.position.distanceTo(vortex.pos);
+                if (dummyDist < vortex.radius) {
+                    const pullDir = new THREE.Vector3().subVectors(vortex.pos, dummyPhysics.position).normalize();
+                    dummyPhysics.velX += pullDir.z * 18 * delta;
+                    dummyPhysics.velZ -= pullDir.x * 18 * delta;
+                    dummyPhysics.angleX = THREE.MathUtils.lerp(dummyPhysics.angleX, Math.PI / 3.5, 10 * delta);
+                }
+
+                // 6. 吸扯環境建築與地表掩體 (實現第27話清空遮蔽物)
+                checkBuildingHits(vortex.pos, vortex.radius * 0.7, new THREE.Vector3(0,0,0), 'blue_suction');
+
+                // 7. 重力奇異點「終結爆縮」（坍塌蒸發）
+                if (vortex.duration <= 0) {
+                    // 真空崩潰與高壓爆縮
+                    triggerFlashCut();
+                    triggerHitStop(80);
+                    screenShake = 6.5;
+
+                    // 爆發巨大蒼藍衝擊波
+                    createShockwave(vortex.pos, 0x00ffff, 70);
+                    createImpactFlash(vortex.pos, 0x00d4ff);
+                    spawnPhysicsDebris(vortex.pos, 0x0088ff, 60);
+                    spawnCrackAndShatter(vortex.pos, 0x00ffff, 18, false);
+
+                    // 藍白色重力閃電
+                    for (let l = 0; l < 8; l++) {
+                        const lightningPos = vortex.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*8, (Math.random()-0.5)*4, (Math.random()-0.5)*8));
+                        createSpatialGlitch(lightningPos);
+                    }
+
+                    // 清理所有殘留的浮空碎石塊
+                    vortex.debrisChunks.forEach(chunk => {
+                        createParticles(chunk.mesh.position, 0x00d4ff, 4, 10);
+                        scene.remove(chunk.mesh);
+                        chunk.mesh.geometry.dispose();
+                        chunk.mesh.material.dispose();
+                    });
+
+                    // 對中心區域內的所有小怪造成終極毀滅打擊
+                    activeMobs.forEach(mob => {
+                        if (mob.mesh.position.distanceTo(vortex.pos) < 12.0) {
+                            mob.health = 0; // 直接湮滅
+                            createEvaporationParticles(mob.mesh.position.clone().setY(1.2), 0x00d4ff, 35);
+                        }
+                    });
+
+                    scene.remove(vortex.group);
+                    blueVortices.splice(vIdx, 1);
+                }
+            }
+
+            // --- 小怪 AI 與邏輯更新 ---
             for (let i = activeMobs.length - 1; i >= 0; i--) {
                 let mob = activeMobs[i];
                 let pPos = playerGroup.position;
                 let mPos = mob.mesh.position;
                 
-                // 物理位移與阻力
                 mPos.x += mob.velX * delta;
                 mPos.z += mob.velZ * delta;
-                mob.velX *= 0.85; // 地面摩擦力
+                mob.velX *= 0.85; 
                 mob.velZ *= 0.85;
 
-                // 邊界限制
                 mPos.x = THREE.MathUtils.clamp(mPos.x, -390, 390);
                 mPos.z = THREE.MathUtils.clamp(mPos.z, -390, 390);
 
@@ -2326,14 +2601,11 @@
 
                 let isBlockedByLimitless = false;
 
-                // 檢測五條悟的無下限阻擋
                 if (selectedCharacter === 'gojo' && distToPlayer < 3.0 && !domainState.active) {
                     isBlockedByLimitless = true;
-                    // 無下限排斥力，強行停止並微幅推開小怪
                     mob.velX -= dirToPlayer.x * 12 * delta;
                     mob.velZ -= dirToPlayer.z * 12 * delta;
                     
-                    // 撞擊無下限產生波紋
                     if (Math.random() < 0.15) {
                         let hitSurfacePos = mPos.clone().add(dirToPlayer.clone().multiplyScalar(1.0));
                         hitSurfacePos.y += 0.8;
@@ -2342,7 +2614,6 @@
                 }
 
                 if (mob.health <= 0) {
-                    // 小怪死亡特效
                     createParticles(mPos.clone().setY(1.0), 0xaa00ff, 25, 20);
                     createSpatialGlitch(mPos.clone().setY(1.0));
                     scene.remove(mob.mesh);
@@ -2352,27 +2623,22 @@
 
                 if (!isBlockedByLimitless && mob.attackTimer <= 0) {
                     if (distToPlayer > 1.8) {
-                        // 朝向玩家移動
                         mPos.x += dirToPlayer.x * mob.speed * delta;
                         mPos.z += dirToPlayer.z * mob.speed * delta;
                         mob.mesh.lookAt(pPos.x, mPos.y, pPos.z);
                         
-                        // 跑步動畫
                         mob.arms[0].rotation.x = Math.sin(time * 12) * 0.6;
                         mob.arms[1].rotation.x = -Math.sin(time * 12) * 0.6;
                     } else {
-                        // 進入攻擊範圍，發動攻擊
-                        mob.attackTimer = 1.5; // 攻擊冷卻
-                        mob.arms[1].rotation.x = -Math.PI / 1.5; // 舉手揮拳
+                        mob.attackTimer = 1.5; 
+                        mob.arms[1].rotation.x = -Math.PI / 1.5; 
                         
-                        // 對玩家造成傷害/震動
                         screenShake = Math.max(screenShake, 1.2);
                         createImpactFlash(pPos.clone().setY(1.5), 0xff1133);
                         spawnCrackAndShatter(pPos, 0xff1133, 1.5, true);
                     }
                 }
                 
-                // 攻擊冷卻與手臂回正
                 if (mob.attackTimer > 0) {
                     mob.attackTimer -= delta;
                     if (mob.attackTimer < 1.2) {
@@ -2532,6 +2798,10 @@
                             createParticles(new THREE.Vector3(0, 1.5, 1.5).applyMatrix4(playerGroup.matrixWorld), 0x010103, 5); 
                         }
                     }
+                } else if (skillCharge.type === 'blue_max') {
+                    let handPos = new THREE.Vector3(0, 1.5, 1.2).applyMatrix4(playerGroup.matrixWorld);
+                    createImplosionParticles(handPos, 8.0, 0x00d4ff, 3);
+                    screenShake = skillCharge.time * 2.5;
                 } else if (skillCharge.type === 'space_rend') {
                     let handPos = new THREE.Vector3(0, 1.2, 2.0).applyMatrix4(playerGroup.matrixWorld);
                     if (Math.random() < 0.6) {
@@ -2587,7 +2857,13 @@
                 else if (attackType === 2) { rightLegGroup.rotation.x = THREE.MathUtils.lerp(rightLegGroup.rotation.x, -Math.PI/1.6, 40*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, Math.PI/4, 20*delta); }
                 else if (attackType === 3) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2.5, 15*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2.5, 15*delta); }
                 else if (attackType === 4) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 30*delta); playerGroup.rotation.y += 5*delta; playerGroup.position.addScaledVector(new THREE.Vector3(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y)), -8*delta); }
-                else if (attackType === 5) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2.5, 15*delta); rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/8, 15*delta); playerGroup.rotation.y += 2*delta; }
+                else if (attackType === 5) { 
+                    // 出力最大「蒼」：五條悟雙手向前結印，指尖電光聚束
+                    rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2.2, 25*delta); 
+                    rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, -Math.PI/12, 25*delta); 
+                    leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2.2, 25*delta); 
+                    leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, Math.PI/12, 25*delta); 
+                }
                 else if (attackType === 6) { rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/2, 20*delta); rightArmGroup.rotation.z = THREE.MathUtils.lerp(rightArmGroup.rotation.z, Math.PI/4, 20*delta); leftArmGroup.rotation.x = THREE.MathUtils.lerp(leftArmGroup.rotation.x, -Math.PI/2, 20*delta); leftArmGroup.rotation.z = THREE.MathUtils.lerp(leftArmGroup.rotation.z, -Math.PI/4, 20*delta); }
                 else if (attackType === 7) { 
                     rightArmGroup.rotation.x = THREE.MathUtils.lerp(rightArmGroup.rotation.x, -Math.PI/1.1, 40*delta); 
@@ -2739,7 +3015,7 @@
                 raycaster.setFromCamera(mouse, camera); const aimPoint = raycaster.intersectObjects(interactableSurfaces)[0]?.point || targetLookAt;
                 
                 if (cinematic.type === 'melee' || cinematic.type === 'teleport') { targetCamPos.copy(new THREE.Vector3(3, 2, -5).applyMatrix4(playerGroup.matrixWorld)); } 
-                else if (cinematic.type === 'blue') { targetCamPos.copy(new THREE.Vector3(4, 3, -8).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
+                else if (cinematic.type === 'blue') { targetCamPos.copy(new THREE.Vector3(2.5, 2.0, -5).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
                 else if (cinematic.type === 'red') { targetCamPos.copy(new THREE.Vector3(-4, 0.5, -3).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); } 
                 else if (cinematic.type === 'purple') { targetCamPos.copy(new THREE.Vector3(0, 4, -cameraDistance*0.8).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(playerGroup.position); targetLookAt.y += 1.5; } 
                 else if (cinematic.type === 'purple_fire') { targetCamPos.copy(new THREE.Vector3(2, 3, -10).applyMatrix4(playerGroup.matrixWorld)); targetLookAt.copy(aimPoint); }
@@ -2771,23 +3047,37 @@
             }
 
             for (let i = projectiles.length - 1; i >= 0; i--) {
-                let p = projectiles[i]; p.mesh.position.addScaledVector(p.dir, p.speed * delta); p.life -= delta;
+                let p = projectiles[i]; 
+
+                if (p.type === 'blue_singularity_seed') {
+                    p.mesh.position.addScaledVector(p.dir, p.speed * delta);
+                    p.life -= delta;
+                    
+                    if (p.mesh.position.distanceTo(p.targetPos) < 2.0 || p.life <= 0) {
+                        createMaximumOutputBlueVortex(p.mesh.position);
+                        scene.remove(p.mesh);
+                        projectiles.splice(i, 1);
+                        continue;
+                    }
+                    continue;
+                }
+
+                p.mesh.position.addScaledVector(p.dir, p.speed * delta); p.life -= delta;
                 checkBuildingHits(p.mesh.position, p.size, p.dir, p.type);
 
                 if (p.mesh.position.distanceTo(dummyPhysics.position) < (p.size + 1.2)) {
-                    let pushForce = 35; if (p.type === 'purple') pushForce = 90; if (p.type === 'blue') pushForce = -20;  
+                    let pushForce = 35; if (p.type === 'purple') pushForce = 90; 
                     if (p.type === 'space_rend') pushForce = 70; 
                     dummyPhysics.velX = p.dir.z * pushForce; dummyPhysics.velZ = -p.dir.x * pushForce;
                     
                     if (p.type === 'space_rend') {
                         spawnSpaceShatter(p.mesh.position, 12);
                     } else {
-                        spawnCrackAndShatter(p.mesh.position, (p.type==='purple'?0xaa00ff:(p.type==='blue'?0x00aaff:0xffffff)), p.type === 'purple' ? 10 : 5, true); 
+                        spawnCrackAndShatter(p.mesh.position, (p.type==='purple'?0xaa00ff:0xffffff), p.type === 'purple' ? 10 : 5, true); 
                     }
                     p.life = 0;
                 }
 
-                if (p.type === 'blue') { p.mesh.children.forEach(c => { if(c.geometry && c.geometry.type==='TorusGeometry') { c.rotation.x+=12*delta; c.rotation.y+=12*delta; }}); screenShake = Math.max(screenShake, 0.2); if(Math.random()<0.6) createImplosionParticles(p.mesh.position, 12, 0x0088ff, 3); }
                 if (p.type === 'red') { p.mesh.scale.addScalar(4*delta); screenShake = Math.max(screenShake, 0.4); if(Math.random()<0.7) createParticles(p.mesh.position, 0xff3300, 5, 30); if(Math.random()<0.3) createParticles(p.mesh.position, 0xff0000, 2, 60); }
                 if (p.type === 'purple') { p.mesh.scale.addScalar(1.5*delta); p.mesh.rotation.y+=5*delta; p.mesh.rotation.x+=3*delta; screenShake = 0.6; if(Math.random()<0.8) createParticles(p.mesh.position, 0x010103, 8); if(Math.random()<0.5) createParticles(p.mesh.position, p.color, 5); if(Math.random()<0.3) createImplosionParticles(p.mesh.position, 15, 0xaa00ff, 2); }
                 if (p.type === 'space_rend') { 
@@ -2799,7 +3089,6 @@
                 if (p.life <= 0) {
                     if (p.type === 'purple') { screenShake = 4.0; createParticles(p.mesh.position, 0x010103, 80); triggerHitStop(80); createBlackFlash(p.mesh.position, 12); spawnCrackAndShatter(p.mesh.position, p.color, 12, false); } 
                     else if (p.type === 'red') { screenShake = 1.5; spawnCrackAndShatter(p.mesh.position, p.color, 5, false); } 
-                    else if (p.type === 'blue') { screenShake = 2.0; createImplosionParticles(p.mesh.position, 25, 0x00ffff, 80); spawnCrackAndShatter(p.mesh.position, p.color, 5, false); }
                     else if (p.type === 'space_rend') { 
                         screenShake = 3.5; createShockwave(p.mesh.position, 0xffffff, 40); addDistortion(p.mesh.position, 0.6, 1.5, 0.5); triggerHitStop(40);
                         spawnSpaceShatter(p.mesh.position, 12); 
